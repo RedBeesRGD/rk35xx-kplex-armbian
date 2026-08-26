@@ -3,7 +3,7 @@
 Under CPU load the box's uplink drops to the 6.0 Mbit/s basic rate and stays there. Downlink is
 unaffected. Only re-association recovers it. Measured 76.33 → 4.60 Mbps, a 16× collapse.
 
-Decision and pointer live in `../../artsense-arm/PLAN.md`; the patch is
+Decision and pointer live in `../../../artsense-arm/PLAN.md`; the patch is
 `patches/0001-skw-txba-rearm-quirk.patch`; the reproducer is
 `bench/wifi_latch_repro.sh`.
 

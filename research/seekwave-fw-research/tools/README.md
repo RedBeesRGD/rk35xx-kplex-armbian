@@ -1,6 +1,6 @@
 # Reproducing the analysis
 
-Firmware blobs live in `../../firmware/h96max/seekwave-fw/`
+Firmware blobs live in `../../../firmware/h96max/seekwave-fw/`
 (also `/lib/firmware/` on a running box).
 
 ## 1. Decompile
