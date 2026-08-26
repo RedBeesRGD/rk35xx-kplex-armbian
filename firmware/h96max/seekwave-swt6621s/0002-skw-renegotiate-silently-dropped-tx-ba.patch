@@ -1,0 +1,224 @@
+From 2b8e1d7a4c9f06e35a2b7c1d8e4f90a6215bc3d7 Mon Sep 17 00:00:00 2001
+From: Artem Butusov <art.sormy@gmail.com>
+Date: Sat, 23 Aug 2026 18:05:22 -0400
+Subject: [PATCH] skw: renegotiate a TX BA session the firmware dropped silently
+
+A TID drops to 6.0 Mbit/s uplink under CPU load and stays there until
+re-association. Downlink is unaffected.
+
+skw_setup_txba() runs on every TX frame and its only gate is
+peer->txba.bitmap, which is set when ADD_TX_BA is *queued* and cleared only
+on a send failure, an error status, or DEL_TX_BA. If the firmware drops a
+session without sending DEL_TX_BA the bit stands, the function returns early
+forever, and that TID never renegotiates. Without BA it cannot use A-MPDU, so
+it loses HE; the ladder drops legacy OFDM when the peer advertises HE, leaving
+6.0 Mbit/s as the highest surviving rate.
+
+Instrumented over 300 s: 54 DEL_TX_BA, 53 ADD_TX_BA, sessions renegotiated
+about every 5 s. Only the last teardown goes unreported. TID 0's final event
+is ADD_TX_BA status 0 at t+168.6 s, the latch lands at t+170-180 s, and
+nothing follows, while TIDs 1 and 4 keep cycling.
+
+Detect it and re-arm. Suspicion is a session claimed longer than
+txba_stale_sec (default 10 s, against ~5 s measured); confirmation is a
+GET_STA showing tx.rate legacy while rx.rate is not, which cannot happen on a
+working aggregated link. A peer with no HE reads legacy in both directions,
+so the check never fires there.
+
+GET_STA is the only source of TX rate and nothing pushes it, so the driver
+polls it from work context. Cost is one command per peer per interval, and
+only while that peer is transmitting.
+
+Validated by toggling txba_stale_sec on a single latched association - no
+reload, no re-association, same load:
+
+    4.65 -> 74.44 Mbit/s (+10 s)
+    4.61 -> 77.76 Mbit/s (+20 s)
+    4.57 -> 75.29 Mbit/s (+30 s)
+
+Each recovery coincides with the "stale TXBA" log. Untreated latches do not
+recover: controls held 18-21 consecutive samples at 6.0 Mbit/s.
+
+Tested on an H96 Max / RK3518 (SWT6621S, 2.4 GHz).
+
+Signed-off-by: Artem Butusov <art.sormy@gmail.com>
+---
+ drivers/swt6621s_wifi/skw_cfg80211.c | 19 ++++++++++++++++++
+ drivers/swt6621s_wifi/skw_cfg80211.h |  2 ++
+ drivers/swt6621s_wifi/skw_core.c     | 29 ++++++++++++++++++++++++++--
+ drivers/swt6621s_wifi/skw_iface.h    |  1 +
+ drivers/swt6621s_wifi/skw_work.c     | 37 ++++++++++++++++++++++++++++++++++++
+ drivers/swt6621s_wifi/skw_work.h     |  1 +
+ 6 files changed, 87 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/swt6621s_wifi/skw_cfg80211.c b/drivers/swt6621s_wifi/skw_cfg80211.c
+index 94001c7..7a2a4c0 100644
+--- a/drivers/swt6621s_wifi/skw_cfg80211.c
++++ b/drivers/swt6621s_wifi/skw_cfg80211.c
+@@ -2373,6 +2373,25 @@ static int skw_get_station(struct wiphy *wiphy, struct net_device *dev,
+ 	return ret;
+ }
+ 
++/* Refresh peer->tx.rate / rx.rate from firmware. GET_STA is the only source of
++ * TX rate; nothing pushes it, so a caller that needs it current must ask.
++ */
++int skw_peer_refresh_rate(struct wiphy *wiphy, struct net_device *dev,
++			  const u8 *mac)
++{
++	struct station_info *sinfo;
++	int ret;
++
++	sinfo = kzalloc(sizeof(*sinfo), GFP_KERNEL);
++	if (!sinfo)
++		return -ENOMEM;
++
++	ret = skw_get_station(wiphy, dev, mac, sinfo);
++	kfree(sinfo);
++
++	return ret;
++}
++
+ static int skw_cfg80211_get_station(struct wiphy *wiphy, struct net_device *dev,
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+ 			   const u8 *mac,
+diff --git a/drivers/swt6621s_wifi/skw_cfg80211.h b/drivers/swt6621s_wifi/skw_cfg80211.h
+index 0bfd77e..2a25871 100644
+--- a/drivers/swt6621s_wifi/skw_cfg80211.h
++++ b/drivers/swt6621s_wifi/skw_cfg80211.h
+@@ -1074,4 +1074,6 @@ int skw_wow_disable(struct wiphy *wiphy);
+ int skw_cmd_monitor(struct wiphy *wiphy, struct cfg80211_chan_def *chandef, u8 mode);
+ int skw_suspend(struct wiphy *wiphy, struct cfg80211_wowlan *wow);
+ int skw_resume(struct wiphy *wiphy);
++int skw_peer_refresh_rate(struct wiphy *wiphy, struct net_device *dev,
++			  const u8 *mac);
+ #endif
+diff --git a/drivers/swt6621s_wifi/skw_core.c b/drivers/swt6621s_wifi/skw_core.c
+index e085fdc..3f769d9 100644
+--- a/drivers/swt6621s_wifi/skw_core.c
++++ b/drivers/swt6621s_wifi/skw_core.c
+@@ -70,6 +70,10 @@ char *swt6621s_firmware_dir = "";
+ module_param_named(firmware_dir, swt6621s_firmware_dir, charp, 0644);
+ MODULE_PARM_DESC(firmware_dir, "Firmware subdirectory under standard firmware path (e.g. \"seekwave\"). Empty means root directory.");
+ 
++static uint skw_txba_stale_sec = 10;
++module_param_named(txba_stale_sec, skw_txba_stale_sec, uint, 0644);
++MODULE_PARM_DESC(txba_stale_sec, "Seconds a TX BA session may go unconfirmed before the driver checks it still exists. 0 disables the check.");
++
+ char swt6621s_board_id[64] = "";
+ 
+ int swt6621s_request_firmware(const struct firmware **fw, const char *name,
+@@ -212,8 +216,26 @@ static void skw_setup_txba(struct skw_core *skw, struct skw_iface *iface,
+ 		return;
+ 	}
+ 
+-	if (peer->txba.bitmap & BIT(tid))
++	if (peer->txba.bitmap & BIT(tid)) {
++		/* A live session is renegotiated every few seconds; one claimed
++		 * for much longer may have been dropped without a DEL_TX_BA.
++		 */
++		if (skw_txba_stale_sec &&
++		    time_after(jiffies, peer->txba.stale[tid])) {
++			peer->txba.stale[tid] = jiffies +
++					(unsigned long)skw_txba_stale_sec * HZ;
++
++			tx_ba.tid = tid;
++			tx_ba.lmac_id = iface->lmac_id;
++			tx_ba.peer_idx = peer->idx;
++
++			skw_queue_work(priv_to_wiphy(skw), iface,
++				       SKW_WORK_TXBA_PROBE,
++				       &tx_ba, sizeof(tx_ba));
++		}
++
+ 		return;
++	}
+ 
+ 	if (peer->txba.blacklist & BIT(tid)) {
+ 		if (time_after(jiffies, peer->txba.tx_timeout[tid])) {
+@@ -233,8 +255,11 @@ static void skw_setup_txba(struct skw_core *skw, struct skw_iface *iface,
+ 
+ 	ret = skw_queue_work(priv_to_wiphy(skw), iface, SKW_WORK_SETUP_TXBA,
+ 				&tx_ba, sizeof(tx_ba));
+-	if (!ret)
++	if (!ret) {
+ 		peer->txba.bitmap |= BIT(tid);
++		peer->txba.stale[tid] = jiffies +
++					(unsigned long)skw_txba_stale_sec * HZ;
++	}
+ }
+ 
+ struct skw_ctx_entry *skw_get_ctx_entry(struct skw_core *skw, const u8 *addr)
+diff --git a/drivers/swt6621s_wifi/skw_iface.h b/drivers/swt6621s_wifi/skw_iface.h
+index 16319c8..f705fcf 100644
+--- a/drivers/swt6621s_wifi/skw_iface.h
++++ b/drivers/swt6621s_wifi/skw_iface.h
+@@ -242,6 +242,7 @@ struct skw_txba_ctrl {
+ 	u16 bitmap;
+ 	u16 blacklist;
+ 	unsigned long tx_timeout[SKW_NR_TID];
++	unsigned long stale[SKW_NR_TID];
+ };
+ 
+ enum skw_msdu_filter {
+diff --git a/drivers/swt6621s_wifi/skw_work.c b/drivers/swt6621s_wifi/skw_work.c
+index 9a4b84b..8b62d75 100644
+--- a/drivers/swt6621s_wifi/skw_work.c
++++ b/drivers/swt6621s_wifi/skw_work.c
+@@ -199,6 +199,43 @@ static int skw_work_process(struct wiphy *wiphy, struct skw_iface *iface,
+ 
+ 		break;
+ 
++	case SKW_WORK_TXBA_PROBE: {
++		struct skw_peer_ctx *ctx;
++		u8 addr[ETH_ALEN];
++		bool known = false;
++
++		ba = data;
++		ctx = skw_get_ctx(skw, ba->lmac_id, ba->peer_idx);
++		if (!ctx)
++			break;
++
++		rcu_read_lock();
++		if (rcu_dereference(ctx->entry)) {
++			ether_addr_copy(addr, rcu_dereference(ctx->entry)->addr);
++			known = true;
++		}
++		rcu_read_unlock();
++
++		if (!known || skw_peer_refresh_rate(wiphy, iface->ndev, addr))
++			break;
++
++		skw_peer_ctx_lock(ctx);
++
++		/* Downlink still running HE while uplink has fallen back to a
++		 * legacy rate means the claimed BA session is gone.
++		 */
++		if (ctx->peer && (ctx->peer->txba.bitmap & BIT(ba->tid)) &&
++		    ctx->peer->tx.rate.flags == SKW_RATE_INFO_FLAGS_LEGACY &&
++		    ctx->peer->rx.rate.flags != SKW_RATE_INFO_FLAGS_LEGACY) {
++			skw_warn("stale TXBA, tid: %d, renegotiating\n", ba->tid);
++			SKW_CLEAR(ctx->peer->txba.bitmap, BIT(ba->tid));
++		}
++
++		skw_peer_ctx_unlock(ctx);
++
++		break;
++	}
++
+ 	case SKW_WORK_SETUP_TXBA:
+ 		ba = data;
+ 
+diff --git a/drivers/swt6621s_wifi/skw_work.h b/drivers/swt6621s_wifi/skw_work.h
+index 1d20963..f0a74c5 100644
+--- a/drivers/swt6621s_wifi/skw_work.h
++++ b/drivers/swt6621s_wifi/skw_work.h
+@@ -34,6 +34,7 @@ enum SKW_WORK_ID {
+ 	SKW_WORK_SET_IP,
+ 	SKW_WORK_TX_FREE,
+ 	SKW_WORK_SETUP_TXBA,
++	SKW_WORK_TXBA_PROBE,
+ 	SKW_WORK_TX_ETHER_DATA,
+ 	SKW_WORK_RADAR_PULSE,
+ 	SKW_WORK_RADAR_CAC,
+-- 
+2.39.5

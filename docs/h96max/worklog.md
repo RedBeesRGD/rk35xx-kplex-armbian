@@ -1726,3 +1726,89 @@ matching entry wins, and a hand-added `rk3518` entry placed next to the `rk3528`
 `match chip name: rk3528a`, with the full `0x00f0079c` decode caps — VP9 included. The hazard only
 appears if the entry is appended _after_ `rk3528a`. `mpp_debug=0x10` prints which entry matched;
 trust that over reasoning about the file.
+
+### 2026-08-25 — two Seekwave driver patches folded into the h96max profile
+
+`research/seekwave-tx-latch-bug/patches/` had three; two ship.
+
+| Patch  | Does                                                         | Ships |
+| ------ | ------------------------------------------------------------ | ----- |
+| `0001` | re-arms TX BA on a blind timer                               | no    |
+| `0002` | detects a silently dropped TX BA session and renegotiates it | yes   |
+| `0003` | stops five per-packet `skw_hex_dump()` sites forcing a dump  | yes   |
+
+`0001` is superseded by its own header: it acts without evidence and would renegotiate a healthy
+link against an AP that holds a BA session for minutes. It is the only cover for HT-only and legacy
+peers — `0002` needs an HE downlink to confirm — but whether the fault occurs there is untested, so
+carrying it would ship dead code for an unproven case.
+
+**`0002` moves the root cause out of the firmware.** `skw_setup_txba()` gates on
+`peer->txba.bitmap`, set when `ADD_TX_BA` is queued and cleared only on send failure, error status
+or `DEL_TX_BA`. A session the firmware drops silently leaves the bit set, so the TID never
+renegotiates, loses A-MPDU, loses HE, and the ladder bottoms out at 6.0 Mbit/s. That supersedes the
+firmware rate-ladder theory (`cfg[0x25]` probe attempts, the `ctx[0x1a9]` backoff wrap) as _the_
+cause — that analysis now only explains why the rate cannot climb back once aggregation is gone. On
+by default, `txba_stale_sec=10`.
+
+**`0003`** is the dmesg flood: `skw_hex_dump()`'s `force` flag skips the `SKW_DUMP` check and five
+per-packet sites passed `true`, so 1659 of 1678 driver lines over two days were `short skb` while
+`/proc/skwifid/log_level` said `dump log: disable`.
+
+Wiring: `firmware/h96max/seekwave-swt6621s/` holds the patches, mirroring the IR driver's
+`firmware/common/rockchip-pwm-remotectl-rk35xx/`, and `fetch-seekwave-src.sh` applies every
+`*.patch` after the tarball unpacks. h96max-only by construction — that script is called from this
+board's `board_stage_dkms` and nothing else.
+
+Both dry-ran and then applied clean against the pinned `b1b15016`; `skw_txba_stale_sec = 10` and the
+four `force`-flag sites are present in the fetched tree, `dkms.conf` untouched. 🟢 Neither is
+confirmed on a built image yet — next h96max build should show an idle box no longer accumulating
+`short skb`, and the latch reproducer recovering on its own.
+
+### 2026-08-25 — deployed the two Seekwave patches, two clean reboots
+
+`rk35xx-deploy art@h96max --no-reboot`, verified, then two reboots.
+
+**A gap surfaced first: `rk35xx-update` could not deliver them.** It hardcoded `$DKMS_IR` and
+rebuilt only the IR driver; the Seekwave source was staged solely at image-build time by
+`board_stage_dkms`, so a deploy would have installed nothing and the verification would have passed
+on the _old_ hand-staged driver. Fixed as data rather than per-board code, since the script already
+sources `board.conf`:
+
+```
+BOARD_DKMS_FETCH="seekwave-swt6621s-1.0.0:h96max/fetch-seekwave-src.sh"
+```
+
+`rk35xx-update` loops those `<pkg>-<ver>:<script>` pairs, refetches into `/usr/src/<pkg>` and
+rebuilds. `dkms_rebuild()` stopped hardcoding version `1.0` — name and version now come from the
+directory, so `1.0` and `1.0.0` both work. The R69 declares nothing, so the loop is a no-op there.
+
+**Deploy.** All ten file hunks applied, all three modules rebuilt and installed. Checked _before_
+rebooting, because this box is Wi-Fi only (`end0` DOWN) and a bad module would have taken the only
+link: `txba_stale_sec` present in the freshly built `swt6621s_wifi.ko`, five `force=false` sites in
+the built tree, `dkms status` installed.
+
+**Two reboots, both clean.**
+
+|                  | boot 1 (post-DKMS) | boot 2                                   |
+| ---------------- | ------------------ | ---------------------------------------- |
+| boot time        | 23.0 s             | **18.0 s** (5.3 kernel + 12.7 userspace) |
+| `wlan0`          | up, 192.168.1.236  | up, same lease                           |
+| `txba_stale_sec` | 10                 | 10                                       |
+| `short skb`      | 0                  | 0                                        |
+| watchdog         | 1min 29s           | 1min 29s                                 |
+| failed units     | 0                  | 0                                        |
+
+Both came back on the rebuilt Wi-Fi driver with the same DHCP lease. Two is not the ten
+`board-validation.md` asks for, but it is two more than the open "warm reboot can come up without
+`wlan0`" defect predicts.
+
+**This box was already running the patches** — staged by hand during the research work, with one
+`stale TXBA` recovery already in its log. The deploy's value was making it reproducible from the
+repo instead of from a hand-edited `/usr/src`.
+
+**Also: it runs from SD, not eMMC.** Root is `/dev/mmcblk0p1` on a 56.4 G card; the eMMC is
+`mmcblk2` (it owns the `boot0` companion). The board doc's "~12 s" was an eMMC measurement, so 18.0
+s is the SD figure, not a regression — `board.md` now carries both. `rk35xx-mac-pin.service` costs
+2.4 s of that, which is the interface poll.
+
+The watchdog also went 44 s → 89 s here, which had been pending since the R69 got it on 2026-08-21.

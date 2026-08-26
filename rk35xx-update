@@ -124,19 +124,23 @@ echo "[2/5] refreshing DKMS driver sources + rebuilding"
 "$FW/common/fetch-dkms-src.sh" "$DKMS_IR"
 
 # rebuild so a changed source or a new kernel actually takes: remove --all, then add/build/install.
-# Boards that ship per-driver setup scripts (the R69) go through those, keeping their exact behavior.
+# Version comes from the directory name, so 1.0 and 1.0.0 packages both work.
 dkms_rebuild() {
-  name="$(basename "$1" | sed 's/-1\.0$//')"
-  if [ -x "/usr/local/sbin/$name-setup" ]; then
-    "/usr/local/sbin/$name-setup" || echo "  ($name setup reported an issue; continuing)"
-    return 0
-  fi
-  dkms remove  -m "$name" -v 1.0 --all 2>/dev/null || true
-  dkms add     -m "$name" -v 1.0 || { echo "  ($name dkms add failed; continuing)"; return 0; }
-  dkms build   -m "$name" -v 1.0 || { echo "  ($name dkms build failed; continuing)"; return 0; }
-  dkms install -m "$name" -v 1.0 || echo "  ($name dkms install failed; continuing)"
+  d="$(basename "$1")"; name="${d%-*}"; ver="${d##*-}"
+  dkms remove  -m "$name" -v "$ver" --all 2>/dev/null || true
+  dkms add     -m "$name" -v "$ver" || { echo "  ($name dkms add failed; continuing)"; return 0; }
+  dkms build   -m "$name" -v "$ver" || { echo "  ($name dkms build failed; continuing)"; return 0; }
+  dkms install -m "$name" -v "$ver" || echo "  ($name dkms install failed; continuing)"
 }
 dkms_rebuild "$DKMS_IR"
+
+# boards that fetch their own DKMS sources declare them as "<pkg>-<ver>:<fetch script>" pairs
+for e in ${BOARD_DKMS_FETCH:-}; do
+  d="/usr/src/${e%%:*}"
+  echo "  fetching ${e%%:*}"
+  "$FW/${e#*:}" "$d" || { echo "  (fetch failed; keeping the staged source)"; }
+  dkms_rebuild "$d"
+done
 
 echo "[3/5] installing the DTB into the running kernel"
 "/etc/kernel/postinst.d/$P-dtb-persist" "$(uname -r)"
