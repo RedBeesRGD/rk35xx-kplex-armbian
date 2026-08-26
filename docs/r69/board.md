@@ -266,8 +266,15 @@ Still open:
 
 ## Recovery
 
-✅ **Maskrom is proven** (2026-08-14) — `ld` reported `Vid=0x2207,Pid=0x350c … Maskrom` — so a
-loader that fails to boot is not a brick. This box uses `rk3528_spl_loader-r69.bin`.
+✅ The box **enters maskrom** (2026-08-14): `ld` reported `Vid=0x2207,Pid=0x350c … Maskrom`. 🟡
+Everything past `db` — loading a USB loader, `wl`, a restore — is untested on either board. This box
+uses `rk3528_spl_loader-r69.bin`.
+
+🟡 **Whether the A-to-A cable alone powers the box is untested.** In maskrom the box is a USB
+peripheral, so a host normally supplies VBUS; the 2026-08-14 run did not record its power source.
+The tree's `vcc5v0_otg` (fixed regulator off `vcc5v0_sys`, GPIO-enabled) describes the port under
+Linux in host mode and does not settle the BootROM case. The rule that holds either way: the button
+must be held **before** power reaches the box, whatever supplies it.
 
 To rewrite the loader pair by hand, **find the eMMC first**: `mmcblk` numbering shifts between
 images, and the eMMC is the disk with `boot0`/`boot1` companions.
