@@ -1,55 +1,67 @@
 # H96 Max — board details
 
-Everything specific to the **H96 Max** box (retail name "H96 Max H313" — the H313 is branding, the
-silicon is RK3518). General install/update instructions are in the [README](../../README.md); the
-bring-up story is in [worklog.md](worklog.md) and the device-tree changes in [dtb.md](dtb.md).
+Retail name "H96 Max H313" — the H313 is branding, the silicon is RK3518.
 
 <img src="board.jpg" alt="H96 Max PCB, serial header bottom-right" width="360">
 
 ## Identity — check yours matches before flashing
 
-|               |                                                                                                 |
-| ------------- | ----------------------------------------------------------------------------------------------- |
-| Name          | **H96 Max** (LEFFOT; listed as "H96 Max H313"). Case plate: `RAM 2GB · ROM 16GB · Input 5V⎓2A`  |
-| Board         | silkscreen **`3518_ZX_V01 20250818`** — combined RAM+eMMC module, on-PCB Wi-Fi/BT antennas      |
-| SoC           | **RK3518** — `SoC: 35181001` (same ID as the R69)                                               |
-| RAM / storage | 2 GB LPDDR3 (**a real 2 GB**) · 16 GB Micron eMMC `R1J96N` (14.7 GiB) · SD card slot            |
-| Wi-Fi / BT    | **Seekwave SV6160LITE** (module **SWT6621S**) — SDIO Wi-Fi 6, BT muxed over the same SDIO link  |
-| Ports         | HDMI · USB 3.0 · USB 2.0 · 10/100 Ethernet · SD slot · AV jack · IR receiver · toothpick button |
-| Remote        | **dual-mode** — works over IR unpaired, and pairs over BLE for air-mouse + battery              |
-| Stock         | Android 14, 32-bit, kernel 6.1.118                                                              |
+|               |                                                                                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Name          | **H96 Max** (LEFFOT; listed as "H96 Max H313"). Case plate: `RAM 2GB · ROM 16GB · Input 5V⎓2A`                                                                           |
+| Board         | silkscreen **`3518_ZX_V01 20250818`** — combined RAM+eMMC module, on-PCB Wi-Fi/BT antennas                                                                               |
+| SoC           | **RK3518** — `SoC: 35181001` (same ID as the R69)                                                                                                                        |
+| Label MAC     | **`00:EF:00:4A:43:A6`** ✅ — matches the case label, and held in eMMC vendor storage as `LAN_MAC` (live copy v74); serial `YT26050805378`                                |
+| RAM / storage | 2 GB LPDDR3 (**a real 2 GB**) · 16 GB Micron eMMC `R1J96N` (14.7 GiB) · SD card slot                                                                                     |
+| Wi-Fi / BT    | **Seekwave SV6160LITE** (module **SWT6621S**) — SDIO Wi-Fi 6, BT muxed over the same SDIO link. **Known bug: TX latches at 6 Mbps** — see `todo/h96max-wifi-tx-latch.md` |
+| Ports         | HDMI · USB 3.0 · USB 2.0 · 10/100 Ethernet · SD slot · AV jack · IR receiver · toothpick button                                                                          |
+| Remote        | **dual-mode** — works over IR unpaired, and pairs over BLE for air-mouse + battery                                                                                       |
+| Stock         | Android 14, 32-bit, kernel 6.1.118                                                                                                                                       |
 
 Unlike the R69, all 2 GB of RAM is usable here.
 
+**Wake-on-LAN 🟢 impossible here too, untested on this board.** Same integrated FEPHY as the R69
+(`ethernet-phy-id0044.1400`, `phy-is-integrated`, no `phy-supply`), and WoL needs the PHY awake
+while the MAC sleeps. Proven dead on the R69; 🟢 not ✅ because verification is per-board.
+
 ## Measured on our unit
 
-Not a spec — one box, one kernel. A sanity baseline: if yours lands in the same ballpark, nothing is
-wrong.
+Not a spec — one box, one kernel. If yours lands in the same ballpark, nothing is wrong.
 
-| What              | Result                                                           |
-| ----------------- | ---------------------------------------------------------------- |
-| Ethernet          | **87 Mbit/s goodput** — wire speed for 100FD, both directions    |
-| Wi-Fi (5 GHz, ax) | **173 Mbit/s down / 76 Mbit/s up**, 3.6 ms ping (through SSH)    |
-| eMMC sequential   | **91.6 MB/s read · 44.0 MB/s write** (read is the HS200 ceiling) |
-| eMMC random 4K    | **3,016 read / 3,783 write IOPS**                                |
-| GPU               | **glmark2 41** at 1080p (lima, Mali-450)                         |
-| Thermals          | 49 °C idle · **60 °C peak** after 5 min 4-core load (95 °C trip) |
-| Boot (from eMMC)  | **~12 s** to login (4 s kernel + 8 s userspace)                  |
+| What              | Result                                                                 |
+| ----------------- | ---------------------------------------------------------------------- |
+| Ethernet          | **87 Mbit/s goodput** — wire speed for 100FD, both directions          |
+| Wi-Fi (5 GHz, ax) | **414 Mbit/s down / 380 Mbit/s up** to a wired peer, −34 dBm           |
+| eMMC sequential   | **91.6 MB/s read · 44.0 MB/s write** (read is the HS200 ceiling)       |
+| eMMC random 4K    | **3,016 read / 3,783 write IOPS**                                      |
+| USB 3 sequential  | **389 MB/s read · 360 MB/s write** — SuperSpeed, UAS, ~18% of one core |
+| USB 3 random 4K   | **9,120 read / 8,380 write IOPS** (35.6 / 32.7 MB/s)                   |
+| GPU               | **glmark2 41** at 1080p (lima, Mali-450)                               |
+| Thermals          | 49 °C idle · **60 °C peak** after 5 min 4-core load (95 °C trip)       |
+| Boot              | **~12 s** from eMMC · **18.0 s** from SD (5.3 kernel + 12.7 userspace) |
 
-The eMMC's real win over a good SD card is **random 4K writes — ~6× faster** (3,783 vs 623 IOPS),
-which is what makes the box feel quicker after migrating; sequential gains are milder. The R69's
-Samsung part is quicker still on writes — see its [board doc](../r69/board.md#measured-on-our-unit).
+USB 3 is genuinely SuperSpeed: `5000` Mbps, `uas` not BOT, 389 MB/s sustained for 20 s with no
+resets in `dmesg` — 9× what the 480 Mbps ports carry and **4× this box's own eMMC**, at
+`usr=1.30%, sys=16.25%`. Same Lexar 128 GB drive as the R69, within 1-2% on every figure, so this is
+**the board's ceiling, not the drive's**.
+
+The drive is metal-bodied and **thermally throttles**: a read straight after ~2 GiB of writes plus
+30 s of random-write load returned 327 MB/s, and 371 MB/s twice after a few seconds idle.
+
+eMMC over a good SD card is **~6× on random 4K writes** (3,783 vs 623 IOPS) — that is what makes the
+box feel quicker after migrating. Sequential gains are milder, and the R69's Samsung part is quicker
+still on writes.
 
 ## Hardware video
 
-The RK3528-class VPU via `/dev/mpp_service` — **8K decode and 8K HEVC encode**, well past what the
-box is sold as. Blocks, tools and the test behind each cell: [AGENTS.md](../../AGENTS.md#video-codec--every-format-both-directions).
+RK3528-class VPU via `/dev/mpp_service` — **8K decode and 8K HEVC encode**, past what the box is
+sold as.
 
-**This board needed a device-tree graft to get here.** Its factory tree named the SoC only
-`rockchip,rk3518`, a name no MPP release contains, so the library fell back to "unknown SoC" and the
-entire VPU was unreachable — every encode died at `could not found coding type` and decode never
-left the A53s. With `"rockchip,rk3528a"` appended ([dtb.md](dtb.md)) MPP identifies it:
-`match chip name: rk3528a`, dec caps `0x00f0079c`, enc `0x00100180`.
+**This board needed a device-tree graft to get here.** The factory tree named the SoC only
+`rockchip,rk3518`, which no MPP release contains, so the library fell through to "unknown SoC":
+every encode died at `could not found coding type` and decode never left the A53s. With
+`"rockchip,rk3528a"` appended, MPP reports `match chip name: rk3528a`, dec caps `0x00f0079c`, enc
+`0x00100180`.
 
 **Decode ✅ — fps, measured here, 30-frame runs as a normal user:**
 
@@ -66,40 +78,32 @@ left the A53s. With `"rockchip,rk3528a"` appended ([dtb.md](dtb.md)) MPP identif
 
 **Encode ✅ — fps:**
 
-| Format         |  720p | 1080p |   4K |   8K | Verdict                                  |
-| -------------- | ----: | ----: | ---: | ---: | ---------------------------------------- |
-| HEVC           | 125.9 |  60.6 | 15.9 |  4.0 | 4K/8K output confirmed real by `ffprobe` |
-| MJPEG          | 323.2 | 172.0 | 49.3 | 12.7 |                                          |
-| H.264, stock   |    ❌ |    ❌ |   ❌ |   ❌ | size 0 — an **upstream MPP bug**         |
-| H.264, patched | 115.3 |  54.9 | 14.4 |  3.6 | [12-line fix](../../mpp/README.md)       |
+| Format |  720p | 1080p |   4K |   8K | Verdict                                        |
+| ------ | ----: | ----: | ---: | ---: | ---------------------------------------------- |
+| HEVC   | 125.9 |  60.6 | 15.9 |  4.0 | 4K/8K output confirmed real by `ffprobe`       |
+| MJPEG  | 323.2 | 172.0 | 49.3 | 12.7 |                                                |
+| H.264  | 115.3 |  54.9 | 14.4 |  3.6 | needs MPP >= `905020444`; older returns size 0 |
 
-Not present, and proven rather than assumed: **AV1** is refused with
-`unable to create dec av1 for soc rk3528a unsupported`. **AVS / AVS+ / AVS2** are claimed by the
-capability word but stay 🟡 — no encoder exists to make a sample clip.
+**AV1** is refused: `unable to create dec av1 for soc rk3528a unsupported`. **AVS / AVS+ / AVS2**
+are claimed by the capability word but stay 🟡 — no encoder exists to make a sample clip.
 
 > Two things here contradict MPP's own capability table, which marks this encoder `cap_4k = 0` and
 > the decoder 4K: **8K decodes** on all three main codecs, and **HEVC encodes at 4K and 8K**, with
 > `ffprobe` confirming genuine `7680x4320` bitstreams rather than downscaled ones.
 
-The R69 measures within noise of every number above — same silicon, and a useful cross-check that
-neither box is an outlier ([R69 board doc](../r69/board.md#hardware-video)).
+The R69 measures within noise of every number above — same silicon, so neither box is an outlier.
 
 ## Names on disk
 
-This board uses the family-neutral **`rk35xx-`** naming (only the R69 keeps legacy `r69-` names):
-
-| Thing             | Path                                                                   |
-| ----------------- | ---------------------------------------------------------------------- |
-| Identity dir      | `/usr/local/share/rk35xx/` (incl. `board-id` = `h96max`)               |
-| First-boot setup  | `/usr/local/sbin/rk35xx-firstboot`                                     |
-| Power-key drop-in | `/etc/systemd/logind.conf.d/zz-rk35xx-powerkey.conf`                   |
-| Update in place   | `/usr/local/sbin/rk35xx-update` (or `rk35xx-deploy` from your machine) |
-| Watchdog config   | `/etc/systemd/system.conf.d/zz-rk35xx-watchdog.conf`                   |
+Every installed path is `rk35xx-`, the same as every other board: scripts under `/usr/local/sbin/`,
+identity under `/usr/local/share/rk35xx/` (`board-id` = `h96max`), and two systemd drop-ins named to
+sort last — `logind.conf.d/zz-rk35xx-powerkey.conf` and `system.conf.d/zz-rk35xx-watchdog.conf`.
 
 ## LEDs
 
-Two entries under `/sys/class/leds/`: **`power`** (blue) and **`standby`** (red) — running is blue,
-"off" and suspend are red. Both are independently controllable:
+The two board LEDs are **`power`** (blue) and **`standby`** (red) — running is blue, "off" and
+suspend are red, both independently controllable. Other entries in `/sys/class/leds/` come from the
+kernel, not this board's tree.
 
 ```sh
 echo 1 > /sys/class/leds/power/brightness           # on (0 = off)
@@ -110,8 +114,8 @@ Early boot briefly shows both LEDs dimly lit, until the kernel driver takes the 
 
 ## Remote
 
-**Over IR, with no pairing at all** — every button works out of the box (input device
-`ffa90030.pwm`, usually `/dev/input/event8`; confirm with `evtest`), scancodes from
+**Over IR, with no pairing at all** — every button works out of the box. The receiver is input
+device `ffa90030.pwm` at the stable path `/dev/input/ir-remote`; scancodes come from
 `rockchip,usercode = <0xfb04>` in `firmware/h96max/board.dts`:
 
 | Button            | Key event                                        |
@@ -131,15 +135,14 @@ Early boot briefly shows both LEDs dimly lit, until the kernel driver takes the 
 | YT / NF / PV / GP | `KEY_F6` / `KEY_F7` / `KEY_F8` / `KEY_F9`        |
 | Mouse             | `KEY_TEXT`                                       |
 
-> **Baseline, not a spec.** This is _our_ unit's mapping. These boxes vary between production runs —
-> the R69's remote answers to a different usercode (`0xfb05`) with different codes for OK and the
-> app row. Check yours with `evtest` (method in the [README](../../README.md#remote)).
+> **Baseline, not a spec** — _our_ unit's mapping, and these boxes vary between production runs. The
+> R69's remote answers to a different usercode (`0xfb05`) with different codes for OK and the app
+> row. Check yours with `evtest /dev/input/ir-remote`.
 
-**Over Bluetooth** (optional) it adds the **air-mouse** and a battery reading. Pairing mode is
-**left + right held until the LED blinks** — a steady glow comes first, the blink is pairing mode,
-and the glow ends once a host connects. Use the one-session recipe in the
-[README](../../README.md#remote); `pair` from a separate invocation fails with
-`AuthenticationFailed`, and so does `--agent` alone.
+**Over Bluetooth** (optional) adds the **air-mouse** and a battery reading. Pairing mode is **left +
+right until the LED blinks** — steady glow first, then the blink; the glow ends once a host
+connects. Pair in **one `bluetoothctl` session**: a separate `pair` fails with
+`AuthenticationFailed`, as does `--agent` alone.
 
 ### Picking it out of a crowded scan
 
@@ -153,37 +156,30 @@ If the `Bluetooth remote` name doesn't show, these narrow it down:
   and once found, HID `0x1812` + Battery `0x180f` services — nothing else in a living room
   advertises HID.
 
-While BLE-connected the remote stops transmitting IR (so buttons never double-fire), and it falls
-back to IR when unpaired — which is also why the power button can still wake the box from "off",
-where Bluetooth is dead. BLE keycodes differ from the IR ones (OK is `KEY_SELECT`, home is
-`KEY_HOMEPAGE`), so anything binding keys should handle both.
+While BLE-connected the remote stops transmitting IR, so buttons never double-fire; it falls back to
+IR when unpaired, which is why the power button still wakes the box from "off". BLE keycodes differ
+from the IR ones (OK is `KEY_SELECT`, home `KEY_HOMEPAGE`), so a keybinding should handle both.
 
-The **voice mic** is out of scope rather than broken. The BLE link is up and the button reports
-(`KEY_SEARCH`); the audio just rides the proprietary Android-TV voice GATT service (`0xfeb3`) rather
-than standard BLE audio, so it surfaces neither an ALSA capture device nor a BlueZ transport.
-Capturing and acting on that stream is an application's job — a userspace client for the protocol —
-not something an image builder can ship.
+The **voice mic** is out of scope, not broken: the BLE link is up and the button reports
+`KEY_SEARCH`, but the audio rides the proprietary Android-TV voice GATT service (`0xfeb3`) rather
+than standard BLE audio, so it surfaces neither an ALSA capture device nor a BlueZ transport. That
+needs a userspace client for the protocol, not an image builder.
 
 ## Watchdog
 
-The SoC watchdog (`snps,dw-wdt`) is enabled in `board.dtb` and armed by systemd
-(`RuntimeWatchdogSec=30`), so a hard hang reboots the box instead of leaving it dead. Verified here:
-a deliberate stop-petting test hard-reset it.
-
-The hardware timeout is **fixed at 44 s** — `SETTIMEOUT` is unsupported and there is no magic-close,
-so once something opens `/dev/watchdog` it cannot be disarmed short of a reset. To turn it off, set
-`RuntimeWatchdogSec=off` in the drop-in above and `systemctl daemon-reexec`.
+✅ `/dev/watchdog` appears, systemd takes it, and a deliberate stop-petting test hard-reset this
+box.
 
 ## Toothpick button
 
-The recessed button behind the AV jack is an `adc-keys` input — `KEY_VOLUMEUP` on its own event
-node, free to remap. Held at power-on it is also the BootROM's maskrom trigger.
+An `adc-keys` input: `KEY_VOLUMEUP` on its own event node, free to remap. Held at power-on it is the
+BootROM's maskrom trigger.
 
 ## HDMI on a PC monitor
 
 TVs are fine. **PC monitors whose native mode needs a non-standard pixel clock** (e.g. 2256×1504)
-show a garbled image with a dotted band and an odd refresh rate — the vendor clock driver can only
-synthesize standard HDMI rates. Pin a standard mode:
+show a garbled image with a dotted band and an odd refresh rate: the vendor clock driver synthesizes
+only standard HDMI rates. Pin a standard mode:
 
 ```sh
 # append to extraargs in /boot/armbianEnv.txt, then reboot
@@ -192,10 +188,64 @@ video=HDMI-A-1:1920x1080@60
 
 This is deliberately **not** baked into the image: it would cap 4K TVs at 1080p.
 
+## Warm reboot is unreliable: dwmmc does not always re-initialise
+
+❌ **The bug (2026-08-15).** `systemctl reboot` on the SD-booted Armbian intermittently never came
+back: initramfs retried ~22 times, gave up with `ALERT! UUID=… does not exist`, and only a **power
+cycle** recovered it.
+
+🟡 **Partial mitigation: strip `sd-uhs-sdr12/25/50/104` from `mmc@ffc30000`.** The card then runs
+plain `high speed SDXC` at 3.3 V, and the SD root failure stopped recurring. The cost is real and
+accepted: SDR104 (148.5 MHz, ~70 MB/s rootfs reads) drops to high-speed 50 MHz. **This treats a
+symptom, not the cause.**
+
+**The same root cause has a second symptom: no `wlan0`.** On 2026-08-15 a warm reboot came up with
+the rootfs fine but no Wi-Fi, because the Seekwave driver gave up waiting for its SDIO card:
+
+```
+[SKWSDIO ERROR] skw_sdio_scan_card: wait scan card time out
+[SKWSDIO INFO]  skw_sdio_remove_card: sdio_unregister_driver
+[SKWSDIO ERROR] skw_sdio_io_init: scan card fail
+```
+
+Which symptom appears depends on which `dwmmc` slot loses the race after a warm reset: SD loses and
+there is no root, SDIO loses and there is no Wi-Fi. The `sdhci` eMMC is never affected.
+
+❌ **The Wi-Fi half is unmitigated in the shipped image.** Raising the driver's 1 s wait for its
+SDIO card to 10 s — enough to cover the mmc core's 400k/300k/200k/minimum retry ladder — did fix it:
+**15 consecutive warm reboots** (2026-08-15, 5 + 10 runs), every one a fresh `boot_id`, `wlan0` up,
+zero `wait scan card time out`. But that patch was against the Armbian build tree in the now-closed
+`armbian/build#10440`. The overlay stages the pinned upstream driver unmodified, and commit
+`b1b15016` still waits `msecs_to_jiffies(1000)` in `skw_sdio_scan_card()`. Carrying it here is the
+open item in `todo/rk35xx-sd-uhs-warm-reset.md`.
+
+**What the failure actually looked like**, from `verbosity=7` captured via ramoops — note the eMMC
+is never affected, and both `dwmmc` controllers stumble while only the SD fails to recover:
+
+```
+14.51  mmc0 (SDIO, ffc20000): -110  -> recovers, SDR104 SDIO card
+14.58  mmc1 (SD,   ffc30000): -110  -> retries 15.19, 15.81, 16.41 ... never recovers
+14.19  mmc2 (eMMC, ffbf0000): fine, HS200
+```
+
+**Five candidates were tested on hardware and disproven** — recorded in `dtb.md` so nobody repeats
+them: `full-pwr-cycle`, `regulator-boot-on` on `vccio_sd`, `driver_async_probe=dwmmc_rockchip` (the
+factory's own cmdline), an `mmc-pwrseq-simple` swap for `vcc_sd`, and simply waiting longer.
+
+**The R69 strips the same properties for a different reason.** It has _no 1.8 V switch at all_
+(`vcc_sd` is a fixed 3.3 V rail), so the UHS properties it inherited from the ROCK 2F made the
+kernel negotiate 1.8 V signalling the pads cannot do, hanging some cards even at cold boot — there
+the strip is a **correctness fix**. This board has a real `vccio_sd` 1.8/3.3 V switch and UHS works
+at cold boot, so here it is a **reliability-for-speed trade**.
+
+Still open: why a warm reset leaves `dwmmc` unable to re-initialise while `sdhci` never stumbles. A
+driver question, not a device-tree one, and what stands between this board and SDR104 —
+`todo/rk35xx-sd-uhs-warm-reset.md`.
+
 ## Recovery
 
-Loader pair for this board, if you ever need to rewrite it by hand. **Find the eMMC first** —
-`mmcblk` numbering shifts between images, and the eMMC is the disk with `boot0`/`boot1` companions:
+To rewrite the loader pair by hand, **find the eMMC first**: `mmcblk` numbering shifts between
+images, and the eMMC is the disk with `boot0`/`boot1` companions.
 
 ```sh
 EMMC=/dev/$(ls -d /sys/block/mmcblk*boot0 | head -1 | sed 's|.*/||;s|boot0||')

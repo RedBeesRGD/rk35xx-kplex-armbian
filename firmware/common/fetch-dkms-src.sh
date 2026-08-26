@@ -6,7 +6,7 @@ set -e
 IRDIR="${1:?usage: fetch-dkms-src.sh <ir-src-dir>}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-# pinned vendor-kernel commit (the branch moves; the commit doesn't); provenance in docs/
+# pinned vendor-kernel commit (the branch moves; the commit does not)
 SHA=31cd4f11b5ec31fc361256a04237416f278b62b2
 BASE="https://raw.githubusercontent.com/armbian/linux-rockchip/$SHA"
 

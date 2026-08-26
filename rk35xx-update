@@ -7,7 +7,6 @@
 #
 # The board is auto-detected from the identity dir; --board overrides. Every installed name derives
 # from the board's BOARD_PREFIX (see firmware/<board>/board.conf), which is rk35xx- on every board.
-# R69 boxes deployed before that used r69- names; those are removed on the next run — see migrate().
 #
 # Deliberately does NOT redo the one-time image-build steps (rebrand, the unit-enable drop-in, the
 # console/armbianEnv edit, board drop-ins) — those are already in place on a booted box, and the
@@ -77,6 +76,8 @@ OLD_DTB="$(dtbsum)"
 
 # pre-rename r69- units and hooks run alongside the rk35xx- ones if left in place.
 # /usr/local/share/r69 stays: the running checkout may live under it.
+# Delete artifacts of earlier layouts. Paths are named here only so they can be removed; what the
+# payload installs is payload.list.
 migrate() {
 	old_units="r69-firstboot.service r69-mac-pin.service r69-bt.service"
 	for u in $old_units; do
@@ -95,7 +96,6 @@ migrate() {
 		/etc/kernel/postinst.d/r69-dtb-persist /etc/kernel/postinst.d/00-r69-kernel-prepare; do
 		if [ -e "$f" ]; then echo "  migrating: removing $f"; rm -f "$f"; fi
 	done
-	# rk630phy ships in-tree now, so its DKMS package is gone from the payload
 	for m in rockchip-pwm-remotectl-r69/1.0 rk630-phy-r69/1.0 rk630-phy-rk35xx/1.0; do
 		dkms status "$m" 2>/dev/null | grep -q . || continue
 		echo "  migrating: removing DKMS $m"
@@ -103,7 +103,6 @@ migrate() {
 	done
 	rm -rf /usr/src/rockchip-pwm-remotectl-r69-1.0 /usr/src/rk630-phy-r69-1.0 /usr/src/rk630-phy-rk35xx-1.0
 
-	# the ttyFIQ0 getty is now deleted at image build, not shadowed by a no-op unit
 	for f in /etc/systemd/system/getty.target.wants/serial-getty@ttyFIQ0.service \
 		/etc/systemd/system/serial-getty@ttyFIQ0.service; do
 		if [ -e "$f" ]; then echo "  migrating: removing $f"; rm -f "$f"; fi

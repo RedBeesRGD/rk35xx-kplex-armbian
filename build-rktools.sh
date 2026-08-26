@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
-# Build the maskrom recovery kit into tools/rktools (gitignored): rkdeveloptool, plus the USB loader its
-# `db` verb needs. Both are required when a box won't boot — hold the AV-jack button at power-on,
-# plug USB-A-to-A into a real host port, and the SoC enumerates as 2207:350c. Procedure:
-# README.md#recovery.
+# Build the maskrom recovery kit into tools/rktools (gitignored): rkdeveloptool plus one USB loader
+# per board, since a loader carries that board's own DDR init. Native only — USB does not reach a
+# container on macOS.
 #
 # Usage: ./build-rktools.sh              # rkdeveloptool + one loader per board
 #        ./build-rktools.sh --test       # re-check what is already built
-#
-# A loader is the board's own DDR init + Rockchip's usbplug, so it is not portable between boards —
-# one is built per board, named for it. Only the DDR half exists on the eMMC, so a backup alone can
-# never stand in for it.
-# Built natively, never in a container: USB devices do not pass through to containers on macOS, so a
-# containerised binary could compile but never reach the box.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"

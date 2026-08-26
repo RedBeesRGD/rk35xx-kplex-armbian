@@ -21,7 +21,7 @@ done, this is the raw material for the polished writeup.
 | RAM / storage | 2 GB LPDDR3-786 (**real 2 GB** — see below) · 16 GB eMMC `R1J96N` (14.7 GiB, `mmcblk0`) · SD card slot                                                                       |
 | Wi-Fi / BT    | **Seekwave SV6160LITE** (module **SWT6621S**) — SDIO Wi-Fi, BT muxed over the same SDIO link. _Not_ an AIC8800                                                               |
 | Ports         | HDMI · USB 3.0 · USB 2.0 · 10/100 Ethernet · SD slot · AV jack (+ recessed toothpick button) · IR receiver · red/blue LEDs                                                   |
-| Remote        | dual-mode: stock Android pairs it over **Bluetooth**, but every button also transmits **IR** — works unpaired (full keymap in the 2026-08-08 remote entry)                   |
+| Remote        | dual-mode, **one mode at a time**: IR while unpaired, BLE once paired — not both at once (full keymap in the 2026-08-08 remote entry)                                        |
 | Serial header | 3 plated holes between the SD slot and the LEDs — **square = RX · GND · TX** (pinout confirmed), `0xff9f0000` @ **1500000** baud — **works both directions**                 |
 | Bootloader    | factory **DDR `huan.he` v1.11** (`56f70fd2ad`, 25/02/26) · SPL v1.06 · **BL31 v2.3 fwver v1.20** · OP-TEE BL32 v1.06 · vendor U-Boot 2017.09 (Dec 2025)                      |
 | Stock         | **Android 14, 32-bit** (`ro.product.device=rk3518_box_32`, abilist `armeabi-v7a` only), kernel 6.1.118 armv7, SELinux permissive                                             |
@@ -108,7 +108,7 @@ is not a pass — several R69 failures only showed under load, on specific media
 - [x] Wi-Fi smoke: **Wi-Fi 6 negotiated** (HE, 5 GHz ch 40, 540 Mbit/s PHY, signal 100), ping 3.6
       ms, throughput **173 Mbit/s down / 76 Mbit/s up** through SSH encryption — far beyond the
       R69's radio. Long soak optional
-- [x] `wlan0` MAC pinned per-unit at boot (`88:00:33:28:fc:8e` from cpuid — stable lease from here
+- [x] `wlan0` MAC pinned per-unit at boot (`88:00:33:xx:xx:xx` from cpuid — stable lease from here
       on); the OUI is R69-flavored — pick a per-board OUI policy in the payload phase
 
 **Bluetooth**
@@ -118,9 +118,9 @@ is not a pass — several R69 failures only showed under load, on specific media
       (`skw_ucom`/`BTREADY` in the boot log). Armbian path: the `skwbt` DKMS module, no `hciattach`.
       (If a UART mode is ever tried: `fuser` the tty first — the R69's lesson)
 - [x] BT controller **UP and scanning: 181 device-found events** (`btmgmt find`) — required the
-      **K3B chip firmware** (see the BT worklog entry); BD addr `FE:FD:FC:99:08:60` is
+      **K3B chip firmware** (see the BT worklog entry); BD addr `FE:FD:FC:xx:xx:xx` is
       chip-generated — pin per-unit later via `skwbt`'s `bd_addr` module param
-- [x] Bundled remote **pairs over BLE** (`18:24:39:1D:3D:E1` "Bluetooth remote") — bonded, trusted,
+- [x] Bundled remote **pairs over BLE** (`18:24:39:xx:xx:xx` "Bluetooth remote") — bonded, trusted,
       auto-connects; four HID nodes incl. a working **air-mouse** and a battery readout. Pairing
       mode = hold left+right until the remote's LED blinks (2026-08-08 BLE entry)
 - [x] BT nvbin: the vendor partition ships none — `sv6160lite.nvbin` comes from the driver repo, and
@@ -328,8 +328,9 @@ tio -b 1500000 -L --log-file boot.log /dev/cu.usbserial-XXXX
 **First boot on HDMI: Android 14 comes up and asks to pair the remote** — so the bundled remote
 leads with **Bluetooth**. (The R69's remote is likely dual-mode too — its voice button implies a BLE
 half that was never dived into; that port simply drives all 22 buttons over IR.) This board still
-carries an IR receiver and stock still binds the IR driver, so whether this remote also transmits IR
-(e.g. for power-on from cold, the way the R69 wakes) is TBD.
+carries an IR receiver and stock still binds the IR driver. **The remote is one mode at a time** —
+IR while unpaired, BLE once paired — so a paired remote stops driving the IR receiver (established
+2026-08-14).
 
 **The bad news: the serial console is output-only.** The R69's console dropped straight into a root
 shell; this one echoes nothing back — no login, no shell (an Android 14 build without a console
@@ -841,7 +842,7 @@ reboots** — all three addresses identical both times, with the kernel flagging
 | --------- | ------------------- | ---------------------------------------------------------- |
 | `end0`    | `86:33:37:fc:84:74` | u-boot derives it from the SoC serial — reflash-stable too |
 | `wlan0`   | `fe:fd:fc:99:08:5f` | chip-fused (Seekwave efuse)                                |
-| BT        | `FE:FD:FC:99:08:60` | chip-fused (Wi-Fi + 1)                                     |
+| BT        | `FE:FD:FC:xx:xx:xx` | chip-fused (Wi-Fi + 1)                                     |
 
 Registry check ([maclookup.app](https://maclookup.app/) API): none of the prefixes are
 IEEE-registered — `FE:FD:FC` and `86:33:37` carry the locally-administered bit by construction (the
@@ -1337,7 +1338,7 @@ Paired the bundled remote over Bluetooth after all (it was parked as optional on
 sufficient). **Pairing mode: hold left + right until the remote's LED blinks** — a steady red glow
 comes first, the blink is the pairing state, and the glow ends the moment a host connects.
 
-It advertises as **`18:24:39:1D:3D:E1` "Bluetooth remote"** (BLE, vendor `2b54:1600`) and bonds
+It advertises as **`18:24:39:xx:xx:xx` "Bluetooth remote"** (BLE, vendor `2b54:1600`) and bonds
 cleanly: `Paired: yes / Trusted: yes / Connected: yes`, services GAP/GATT, Device Information,
 **Battery**, **HID**, Scan Parameters, plus a vendor `0xfeb3` ("Taobao") service. One procedural
 gotcha worth remembering: pairing fails with `org.bluez.Error.AuthenticationFailed` if the agent is
@@ -1511,8 +1512,8 @@ is idempotent.
 
 ### 2026-08-08 — serial log convicts cpuidle, clears the watchdog
 
-The serial capture of the failed experiment (`stock/h96max/armbian-cpuidle-hang-serial.log`, 3
-boots) settles what the bisect would have shown.
+The serial capture of the failed experiment (3 boots, not kept in the repo) settles what the bisect
+would have shown.
 
 **Boot 1 — good DTB**: a full 37-minute session ending in a clean `systemd-shutdown: Rebooting.`
 (the reboot that loaded the test DTB). **Boots 2 and 3 — test DTB**: both die at **~19 s**, in the
@@ -1662,8 +1663,8 @@ lines: no `venc-opp-table`, so the encoder runs at a fixed 297 MHz with no devfr
 
 Open, and deliberately not guessed at: `rk3528a` vs `rk3528` differ in MPP by exactly one
 capability, **VP9 decode**. We claim `rk3528a` because that is what the sibling board's factory tree
-claims for this silicon; the format matrix is what will confirm or refute it, and
-if VP9 comes back ❌ the correction is that one string.
+claims for this silicon; the format matrix is what will confirm or refute it, and if VP9 comes back
+❌ the correction is that one string.
 
 Untried idea worth recording: a compatible change can probably be tested **without flashing** by
 bind-mounting a doctored file over `/proc/device-tree/compatible` inside a private mount namespace
@@ -1726,6 +1727,156 @@ matching entry wins, and a hand-added `rk3518` entry placed next to the `rk3528`
 `match chip name: rk3528a`, with the full `0x00f0079c` decode caps — VP9 included. The hazard only
 appears if the entry is appended _after_ `rk3528a`. `mpp_debug=0x10` prints which entry matched;
 trust that over reasoning about the file.
+
+### 2026-08-15 — Seekwave scan timeout: 15 clean warm reboots, and the Wi-Fi MAC is not efuse-derived
+
+`patch/misc/seekwave-swt6621s-scan-timeout.patch` (1 s → 10 s wait for the SDIO card) validated over
+**15 consecutive warm reboots** in two runs, 5 then 10. Every iteration a fresh `boot_id`, `wlan0`
+up, `wait scan card time out` count zero. The module on the box is byte-identical to the patched
+build (`swt6621s_wifi.ko` md5 `fb31b232…`), so the result is about this patch and nothing else.
+
+**Correction to
+[the 2026-08-07 entry](#2026-08-07--pinning-removed-for-good-two-reboot-observation--oui-registry-check):
+`wlan0`'s address is not chip-fused.** `skw_setup_mac_address()` (`skw_core.c`) tries three sources
+and this box lands on the third:
+
+```c
+if (user_mac && is_valid_ether_addr(user_mac))          /* skw_mac module param */
+else if (hw_mac && is_valid_ether_addr(hw_mac))         /* chip.mac, from firmware */
+else { eth_random_addr(addr); addr[0]=0xFE; addr[1]=0xFD; addr[2]=0xFC; }
+```
+
+`FE:FD:FC` is a **driver constant marking the fallback**, not an OUI, and the remaining three octets
+come from `eth_random_addr()`. This is not the `CONFIG_PLATFORM_*` trap [AGENTS.md](../../AGENTS.md)
+warns about — the driver's own Makefile does `ccflags-y += -DCONFIG_PLATFORM_ROCKCHIP`, so
+`rockchip_wifi_mac_addr()` is compiled in and did run; it simply returned nothing valid, and the
+firmware's `chip.mac` was invalid too.
+
+The **observation** still holds: `fe:fd:fc:99:08:5f` was identical on two boots seven reboots apart
+today, as it was across two boots on 2026-08-07. So the payload's no-pinning decision stands. But it
+rests on an unexplained stability, not on silicon — most likely the kernel RNG being unseeded and
+deterministic at probe time on a SoC with no hardware RNG and no RTC. That is a thinner margin than
+"efuse" implied: anything changing entropy or probe order could move the address. **Re-check the
+address after any kernel bump**, and treat a change as expected-if-unwelcome rather than a mystery.
+Not yet checked across a reflash, which is the case that would settle it.
+
+### 2026-08-17 — the submission tree wired ethernet to the PHY
+
+Found on the R69 and true here for the same reason. `snps,axi-config`, `snps,mtl-rx-config` and
+`snps,mtl-tx-config` reach the controller's own queue-config subnodes by bare phandle, dtcx's
+property table did not list them, and the numbers were copied into the include-based tree, which
+allocates its own:
+
+| property             | factory tree             | submission tree |
+| -------------------- | ------------------------ | --------------- |
+| `snps,axi-config`    | `gmac0_stmmac_axi_setup` | `spdifm0_pins`  |
+| `snps,mtl-rx-config` | `gmac0_mtl_rx_setup`     | `rmii0_phy`     |
+| `snps,mtl-tx-config` | `gmac0_mtl_tx_setup`     | `macphy_bgs`    |
+
+The gate stripped every `phandle = <` line before diffing, so it compared the literals — identical
+text in both trees — and reported `VERIFIED`. `firmware/h96max/board.dtb` was never affected; it
+carries the factory numbering, where `0x71` is the queue-config node.
+
+The whole `&gmac0` override was those three properties and nothing else, so it is gone. `board.dtb`
+is byte-identical before and after. The tooling fix and the mirror-image error in
+`rockchip,taskqueue-node` are in the R69 worklog and in `dtcx/README.md`.
+
+### 2026-08-17 — annotated submission file dropped
+
+The per-block comments in `armbian-native-annotated.dts` were audited on the R69 and most were wrong
+or restated the code; the overrides describe the vendor's board, which ships no reasons, so asking
+for one comment per block produced invented ones. The file existed only to hold them and is gone —
+`build.sh` emits `armbian-native.dts` as `header.dts` plus generated overrides and compiles that.
+This board's departures from its factory tree are now listed in its `header.dts`, checked against
+`armbian.patch`: the compatible ordering the Seekwave firmware naming depends on, the lima clock and
+interrupt names, ttyS0, the IR wake source, the watchdog, the sd-uhs-* removal, the LED rename, and
+the dropped chosen/fiq-debugger.
+
+### 2026-08-17 — same broken submission, same box, no ethernet
+
+Running the upstreamable Armbian from SD, so the tree comes from `linux-dtb-vendor-rk35xx` rather
+than `firmware/`. The booted blob carried the same corruption as the R69 — `snps,axi-config` at
+`&spdifm0_pins`, `snps,mtl-rx-config` at `&rmii0_phy`, `snps,mtl-tx-config` at `&macphy_bgs` — and
+the box had no ethernet interface.
+
+Installed the rebuilt `upstream/h96max-zx/armbian-native.dtb` (md5 `430fb814`) over the packaged
+one, original kept beside it as `.known-good`, and rebooted.
+
+| check        | result                                                          |
+| ------------ | --------------------------------------------------------------- |
+| stmmac probe | ✅ clean, `end0` with `PHY [stmmac-0:02] driver [RK630 PHY]`    |
+| Bluetooth    | ✅ `hci0`, SDIO                                                 |
+| LEDs         | ✅ `power`, `standby`                                           |
+| VPU          | ✅ `/dev/mpp_service`, `/dev/rga`, `renderD128/129`             |
+| IR           | ✅ `rc0`                                                        |
+| link traffic | 🟡 no cable attached — probe and PHY bind verified, not traffic |
+
+The DTB is package-owned: an `apt` upgrade restores the broken one until the fix is upstream. This
+board has no PR of its own yet.
+
+### 2026-08-17 — the `e2rm` corruption, root-caused and fixed
+
+The 2026-08-09 entry recorded that `e2rm` produced a multiply-claimed block and left the rootfs
+read-only, and the rule became "never delete, write an overriding file instead". Read the source
+this time.
+
+`delete_file()` in e2tools `src/util.c` hands every word of `i_block[]` to
+`ext2fs_block_alloc_stats(..., -1)`. A **fast symlink** stores its target path inline in that array,
+so the target's own bytes are freed as blocks. For the link that started this,
+`/lib/systemd/system/serial-getty@.service`, `i_block[10]` is the trailing `e\0\0\0` of `.service` —
+**101**. That is the same block the worklog recorded. Words that land out of range print
+`Illegal block number`; one that lands in range is cleared with no message at all.
+
+`debugfs`, which this code is derived from, guards the call with `ext2fs_inode_has_valid_blocks2()`.
+e2tools dropped it. Reproduced on a fresh 16 MB image, fixed, verified.
+
+A second bug fell out while testing: `e2rm -r` unlinks a directory but never frees it — a
+directory's link count starts at 2, `rm_file()` decrements once, so it never reaches zero. Orphan
+inode, stale `..`, parent link count too high, leaked block. And `e2ln -s` had never been
+implemented, so the image could not gain a symlink either.
+
+| Fix                                   | Where                    |
+| ------------------------------------- | ------------------------ |
+| symlink delete frees the target bytes | `patches/e2tools/0001-*` |
+| `-r` leaks the directory inode        | `patches/e2tools/0002-*` |
+| `e2ln -s` "Not implemented yet"       | `patches/e2tools/0003-*` |
+
+`./build-e2tools.sh` builds them into `tools/e2tools/`; `build-image.sh` puts that ahead of `PATH`
+and refuses to run without it. The gate asserts every delete leaves the filesystem on the same block
+count as an untouched one, because upstream's suite is a single test that never deletes anything.
+
+The workaround is retired: deletion from an image is a supported operation now.
+
+### 2026-08-17 — MAC pinning back on, and the box has a factory LAN_MAC after all
+
+The 2026-08-07 table dropped `mac-pin` here on "all three MACs silicon/cpuid-stable". The 2026-08-15
+entry already corrected half of that — `wlan0` lands on `eth_random_addr()` behind the `FE:FD:FC`
+driver constant, and its stability is unexplained rather than fused. Pinning is back for `wlan0` on
+that basis: a derived address costs nothing and removes a dependency on RNG determinism at probe.
+
+The other half was wrong too. This box's vendor storage is populated — read out of
+`backup/h96max/emmc-full.img`, sectors 7168–7679, live copy **version 74**:
+
+| item      | value                      |
+| --------- | -------------------------- |
+| `LAN_MAC` | `00:ef:00:4a:43:a6`        |
+| `SN`      | `YT26050805378`            |
+| id20      | `HCYRK3518_c4f3b92e48c6e2` |
+
+`WIFI_MAC` and `BT_MAC` are absent, as on the R69. So `end0` has a factory address that neither the
+old `mac-pin` nor the no-pinning decision ever used — the recorded `c4:2a:fe:7e:2f:33` was the
+cpuid-derived one.
+
+`firmware/h96max/mac-oui` lists `end0 02:ef:00` and `wlan0 fe:fd:fc`. These are the derivation
+fallback only: `rk35xx-mac-pin` prefers the vendor-storage address per interface, so `end0` takes
+`00:ef:00:4a:43:a6` and `wlan0` derives. Both prefixes are locally administered, closing the "pick a
+per-board OUI policy" item left open on 2026-08-04 — `88:00:33` was the AIC8800's prefix and had no
+business on a Seekwave radio, and neither it nor `C4:2A:FE` is registered. `FE:FD:FC` is what the
+Seekwave driver itself falls back to; this just makes the tail deterministic.
+
+✅ Confirmed against the box: `00:ef:00:4a:43:a6` is the address printed on the case label. So
+`end0` now comes up on its assigned address rather than the cpuid-derived `c4:2a:fe:7e:2f:33` it had
+been using since the pinning was dropped.
 
 ### 2026-08-25 — two Seekwave driver patches folded into the h96max profile
 

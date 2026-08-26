@@ -5,7 +5,7 @@
 # donor of the kernel/rootfs/boot plumbing — and bakes in everything board-specific:
 #   - the board's factory idbloader @ sector 64   (the only DDR config stable on its DRAM die)
 #   - our shared u-boot.itb @ sector 16384        (mainline + BL31 v1.21; build-uboot.sh)
-#   - the board device tree                       (see docs/<board>/dtb.md)
+#   - the board device tree                       (firmware/<board>/board.dtb)
 #   - the firmware payload                        (firmware/<board>/payload.list)
 #   - DKMS driver sources fetched on this host    (built offline on first boot)
 #

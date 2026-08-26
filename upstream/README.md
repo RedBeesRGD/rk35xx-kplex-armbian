@@ -14,11 +14,11 @@ the submission itself, and verifies it.
    ```sh
    cd <board> && diff -u --label board.dts --label armbian.dts board.dts armbian.dts > armbian.patch
    ```
-4. Build its DTB — this is what boots — and copy it, with its source, over
-   `firmware/<board>/board.dtb` and `board.dts`. **Needed for overlay mode**, where that pair is
-   what images ship and what `rk35xx-update` installs; `firmware/` is the only tracked copy of this
-   tree, everything under `upstream/` being generated. An upstreamed board gets its DTB from the
-   kernel package instead and never reads `firmware/`.
+4. Build its DTB — this is what boots — and compare it against `firmware/<board>/board.dtb`, the
+   pair images ship and `rk35xx-update` installs. `firmware/` is the only tracked copy of this tree,
+   everything under `upstream/` being generated. `build.sh` reports a difference and leaves
+   `firmware/` alone; `SYNC=1` overwrites it. A board may diverge on purpose — the R69 comments out
+   its uart2 `bluetooth` child, so syncing it would take that box's Bluetooth with it.
 5. `scripts/gen-overrides.py` re-expresses it as `/delete-node/` + `&label { }` over the vendor's
    reference dtsi, under `<board>/header.dts`. That output, `armbian-native.dts`, is the file that
    gets submitted.
@@ -36,11 +36,8 @@ the submission itself, and verifies it.
 Everything but step 3 is `./build.sh`; the submission is generated, so there is no second copy to
 forget to update.
 
-**The overrides carry no comments.** They describe the vendor's board, and the vendor shipped a blob
-with no reasons in it — asking for one comment per block asks for reasons that do not exist, and the
-ones written that way described the wrong node about as often as the right one. What _is_ knowable
-is the departure from the factory tree, because that is `armbian.patch`: those go in `header.dts`,
-one line each, and the commit message points there rather than repeating them.
+**The overrides carry no comments** — they describe the vendor's board, not our changes. Departures
+from the factory tree are `armbian.patch`, and go in `header.dts` one line each.
 
 ## Files
 
@@ -60,15 +57,15 @@ source; the rest is generated and gitignored.
 ## Why a diff
 
 The vendor ships a binary, so the factory tree is the specification and the reviewable artifact is
-what we change about it. `board.dts` recompiles byte-identical to the factory blob; the explicit
-`phandle` properties are what make that true and must stay.
+what we change about it. `board.dts` recompiles byte-identical to the factory blob — the explicit
+`phandle` properties make that true and must stay.
 
-Hand-writing a board over the reference dtsi lands ~34 nodes off — LED GPIOs, IR key tables,
-BT/Wi-Fi GPIOs, regulator wiring, voltage binning. Generating the overrides from the blob is exact.
+Hand-writing a board over the reference dtsi lands ~34 nodes off: LED GPIOs, IR key tables, BT/Wi-Fi
+GPIOs, regulator wiring, voltage binning. Generating the overrides from the blob is exact.
 
 ## Requirements
 
-the patched `dtc` (`./build-dtc.sh`). Steps 5 and 6 also need the kernel's `dt-bindings` and
+The patched `dtc` (`./build-dtc.sh`). Steps 5 and 6 also need the kernel's `dt-bindings` and
 reference dtsi; `build.sh` fetches them sparsely at a pinned commit. Without them it still builds
 the submission and exits 0.
 

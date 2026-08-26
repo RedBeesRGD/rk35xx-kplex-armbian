@@ -11,9 +11,25 @@ cmake -S ~/mpp -B ~/mpp-build -DCMAKE_BUILD_TYPE=Release && nice make -C ~/mpp-b
 export PATH="$HOME/mpp-build/test:$PATH"
 ```
 
-Build **out of tree**: aiming cmake at `~/mpp/build` deletes MPP's own cmake helpers, and every
-later configure dies on `Unknown CMake command "merge_objects"`. For ffmpeg `--enable-rkmpp`,
+Build **out of tree**: aiming cmake at `~/mpp/build` deletes MPP's own cmake helpers and every later
+configure dies on `Unknown CMake command "merge_objects"`. For ffmpeg `--enable-rkmpp`,
 `sudo make -C ~/mpp-build install` puts the library in `/usr/local/lib`.
+
+## The blocks
+
+| Block         | Node                 | MPP name   | Handles                                                     |
+| ------------- | -------------------- | ---------- | ----------------------------------------------------------- |
+| RKVDEC        | `rkvdec@ff740100`    | `vdpu382a` | H.264 · HEVC · VP9 · AVS2 decode — to 8K, 10-bit, AFBC      |
+| JPEG decoder  | `jpegd@ff870000`     | `rkjpegd`  | MJPEG decode, to 8K                                         |
+| VPU2 (legacy) | `vdpu@ff7c0400`      | `vdpu2`    | MPEG-2 · H.263 · MPEG-4 · H.264 · MJPEG · VP8 · AVS, ≤1080p |
+| AVS+ decoder  | `avsd_plus@ff7c1000` | `avspd`    | AVS+                                                        |
+| RKVENC        | `rkvenc@ff780000`    | `vepu540c` | H.264 · HEVC · MJPEG encode, to 8K                          |
+| RGA2          | `rga@ff850000`       | —          | scale / colour-convert between codec stages                 |
+
+MPP marks this encoder 1080p-only (`cap_4k = 0`); it encodes 4K and 8K anyway.
+
+Known non-fatal noise, identical under stock Android: no `venc-opp-table` (encoder fixed at 297
+MHz), and `rkvdec2_init: failed on clk_get clk_core`.
 
 ## Gate — does MPP recognise the SoC?
 
@@ -21,9 +37,9 @@ later configure dies on `Unknown CMake command "merge_objects"`. For ffmpeg `--e
 mpp_debug=0x10 mpi_enc_test -t 7 -w 176 -h 144 -n 1 -o /dev/null 2>&1 | head -3
 ```
 
-`match chip name: …` passes. `use default chip info` means the device tree's root `compatible` names
-nothing MPP knows; every encode then dies at `could not found coding type` and decode quietly runs
-on the CPU. Fix the tree, not MPP's table.
+`match chip name: …` passes. `use default chip info` means the root `compatible` names nothing MPP
+knows: every encode then dies at `could not found coding type` and decode quietly runs on the CPU.
+Fix the tree, not MPP's table.
 
 ## Test
 

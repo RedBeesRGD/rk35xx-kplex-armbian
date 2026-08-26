@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Build the shared RK3518-family bootable u-boot.itb (rk3528) from mainline U-Boot + Rockchip's ATF blob,
-# straight into firmware/common/u-boot.itb (what build-image.sh bakes in). All inputs are pinned so the
-# build is reproducible. Why mainline + why we keep the factory idbloader: docs/r69/worklog.md.
+# Build the shared RK3518-family u-boot.itb into firmware/common/, from pinned mainline U-Boot + ATF.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"

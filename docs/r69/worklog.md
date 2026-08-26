@@ -55,10 +55,13 @@ The obvious doors were all locked:
 
 - **Developer options** wouldn't unlock — tapping the build number 7× did nothing (this box strips
   it), so no ADB the normal way.
-- **No reset button** in the AV jack, and the box has **only USB-A ports** — so the maskrom route
-  needs a **USB-A male-to-male** cable into a real host port. (A plain A-to-C cable into a USB-C Mac
-  won't enumerate: the C end signals "host", the box is also a host → role collision. Converting the
-  box's A port to C doesn't help either.)
+- The box has **only USB-A ports**, so the maskrom route needs a **USB-A male-to-male** cable into a
+  real host port. (A plain A-to-C cable into a USB-C Mac won't enumerate: the C end signals "host",
+  the box is also a host → role collision. Converting the box's A port to C doesn't help either.)
+  There **is** a recovery button in the AV jack — the recessed one, held at power-on, is the
+  BootROM's maskrom trigger, verified 2026-08-14 (enumerates as `2207:350c` over A-to-A); see
+  [board.md](board.md#toothpick-button). An earlier version of this entry said there wasn't, which
+  made maskrom look far less reachable than it is. _(corrected 2026-08-14)_
 
 The door that _did_ open was the **debug UART** — the 3 wires above, on the 4-pad header by the SD
 slot: pinout **GND · TX · RX · 3V3** (square pad = GND; wire GND/TX/RX and cross adapter TX↔RX).
@@ -303,19 +306,22 @@ the 8250 driver owns the `ttySN` namespace from the DT `serialN` aliases — but
 
 Brought up by enabling the right vendor-DTB nodes and verifying on the running box over SSH:
 **HDMI** video + audio, **analog AV** audio, **GPU** (Mali-450 via the open `lima` driver), **USB
-2.0** (HID enumerates), **IR** receiver (`rc0`), **eMMC + SD**, **USB 3.0**, **CPU thermal**. RAM is
-**~1.5 GB, not 2 GB** — the stock "2 GB" is Android misreporting it, not a bug (see below). The
-**front LED**, the **IR remote + power button**, and the `rock-2f`→R69 **identity rename** are all
-done now; the `fd650` front-panel display is **N/A** (the R69 has none). The remote/power/LED story
-is §9.
+2.0** (HID enumerates), **IR** receiver (input device `ffa90030.pwm`; `rc0` is HDMI-CEC, not IR),
+**eMMC + SD**, **USB 3.0**, **CPU thermal**. RAM is **~1.5 GB, not 2 GB** — the stock "2 GB" is
+Android misreporting it, not a bug (see below). The **front LED**, the **IR remote + power button**,
+and the `rock-2f`→R69 **identity rename** are all done now; the `fd650` front-panel display is
+**N/A** (the R69 has none). The remote/power/LED story is §9.
 
 ---
 
 ## 9. The remote, the power button, and the standby LED
 
 The bundled remote drives the box over **infrared** — a Rockchip PWM-capture receiver on `pwm3`
-(`ffa90030`) decodes all 22 keys. The **voice** and **mouse-mode** buttons press as plain keys, but
-their special functions aren't set up, and whether they ride BLE or key-emulation is unconfirmed.
+(`ffa90030`) decodes all 22 keys. The **voice** and **mouse-mode** buttons press as plain keys over
+IR; their real functions ride the remote's **BLE** side, which was later verified here — pairing
+brings up an air-mouse node and a battery reading (see [board.md](board.md)). Voice _audio_ stays
+out of scope: it rides the proprietary Android-TV `0xfeb3` GATT service, established on the
+[H96 Max](../h96max/board.md#remote).
 
 ### IR: a shared-IRQ fix shipped as an out-of-tree module
 
@@ -653,8 +659,12 @@ an R69 (or a similar RK3518 box) running well.
 - Ethernet is **100 Mb/s by design** (integrated RK630 FEPHY / RMII, no gigabit PHY) — and needs the
   **`rk630phy` DKMS driver** (auto-built first boot) for its OTP calibration, or the uncalibrated
   Generic PHY drops some units to 10 Mb/s.
-- The Ethernet MAC looks random but is **stable per box** (systemd `MACAddressPolicy=persistent`);
-  don't hardcode one in the DTB — systemd overrides it anyway.
+- The Ethernet MAC looks random because it **is** — and it is not what the label says. U-Boot
+  generates it with `net_random_ethaddr()` when it finds no `LAN_MAC` in vendor storage **on the
+  medium it booted**, so an SD-booted box never sees the assigned address sitting in the eMMC store.
+  It is stable per card, not per box. (`MACAddressPolicy=persistent` is inert here — systemd skips a
+  device that claims a permanent address. This entry used to credit it; that was wrong.) Corrected
+  2026-08-13; see [armbian-r69.md](../armbian-r69.md).
 
 **Power — there is no PMIC**
 
@@ -818,7 +828,7 @@ board's own pair (`0c0add65…` idbloader, `c13ca928…` u-boot) — the issue-#
 second board, and pleasingly the eMMC's factory idbloader was already that same image.
 
 MAC pinning still earns its keep: the AIC8800 reported a fresh permanent MAC this boot
-(`88:00:33:77:bf:dc`) while the interface runs the pinned `88:00:33:fc:16:a0`, and both pinned
+(`88:00:33:xx:xx:xx`) while the interface runs the pinned `88:00:33:xx:xx:xx`, and both pinned
 addresses are **identical to the ones recorded months ago** — they survived a DTB rebase and a full
 migration because they derive from the SoC cpuid, not from storage.
 
@@ -972,3 +982,693 @@ the diff inline**; the reproduction is the part they can't reconstruct, and it d
 workflow they don't use.
 
 Once the sync lands, `mpp/h264e-vepu540c-status.patch` can be deleted from this repo.
+
+### 2026-08-11 — suspend measured, and it changes what the power button should do
+
+`Suspend-to-RAM ✅` had been resting on "it drops off the network and wakes again", which a shallow
+freeze does too. Measured properly now, with a power meter on the box and the kernel log alongside:
+
+| State            | Power         | Back to usable |
+| ---------------- | ------------- | -------------- |
+| idle, after boot | **1.5 W**     | —              |
+| suspended        | **0.7–0.8 W** | instant        |
+| "off" (poweroff) | **0.8–0.9 W** | 17.5 s         |
+
+and the kernel confirms which state it reached:
+
+```
+PM: suspend entry (deep)
+PM: suspend exit
+```
+
+`deep`, not `s2idle` — `/sys/power/mem_sleep` reports `s2idle [deep]`, so `systemctl suspend` takes
+the real suspend-to-RAM path. Resume comes back clean through `rk_gmac_resume`, `aicwf_sdio_resume`
+and an xHCI reinit.
+
+**Halving is the floor here, not a disappointment.** These boxes have no PMIC — the DT says
+`rockchip,virtual-poweroff = <0x01>` — so the SoC parks and DDR self-refreshes, but the 5 V rails,
+the Ethernet PHY and the Wi-Fi module stay powered because nothing can cut them. A board with a PMIC
+would go well under 0.3 W; 0.75 W is what this hardware can do.
+
+**The user-visible half is the more interesting result.** Waking from suspend lights the blue LED
+_immediately_; a cold boot takes **17.5 s** (4.2 s kernel + 13.3 s userspace) before the box is
+usable. For something that lives under a TV and gets switched on and off daily, that is the whole
+difference between an appliance and a computer.
+
+**"Off" costs more than sleep.** That was not the expected result, and it is the finding that
+matters. Suspend walks every driver's `.suspend()` and parks the SoC with DDR in self-refresh;
+`virtual-poweroff` halts, drivers get `.shutdown()` — which typically does much less — and nothing
+puts DDR into a retention state because nobody cares about the contents. So "off" ends up parked
+with more still running than when asleep. The ranges are adjacent, so the safe claim is that
+powering off buys **nothing** over suspending; the likely claim is that it is slightly worse. Both
+states show red-on/blue-off, so the LEDs are not the difference.
+
+Which reopens a decision recorded earlier as settled. `zz-r69-powerkey.conf` ships
+`HandlePowerKey=poweroff`, and that is systemd's own default — so the file looked like it was
+asserting nothing and a candidate for deletion. On this hardware the better default is arguably
+`suspend`: instant resume, 0.75 W while asleep, IR wake already working, and "off" is a fiction
+anyway since the SoC never loses power. The drop-in then stops being redundant and becomes the one
+line that states board policy. Left as `poweroff` for now — changing a shipped default deserves its
+own decision, not a footnote to a measurement.
+
+**Testing note for whoever does this next:** the R69 has no RTC (`/sys/class/rtc/` is empty) and its
+`end0` was down, so there is no `rtcwake` and no Wake-on-LAN. Suspending it strands the box until
+someone presses the remote. Do not suspend this board remotely unless a human is in front of it.
+
+### 2026-08-11 — the MPP fix is upstream
+
+`rockchip-linux/mpp` commit **`905020444`**, _"fix[hal_h264e]: Read back int_sta on vepu540c"_,
+dated 2026-08-10 — one day after [issue #965](https://github.com/rockchip-linux/mpp/issues/965) was
+filed. The code is ours verbatim (they dropped only the comment), and the commit is authored to
+Artem Butusov, committed by Herman Chen.
+
+So `mpp/h264e-vepu540c-status.patch` is deleted from this repo: any checkout at or after that commit
+needs nothing from us, and older ones can cherry-pick a public commit. The board docs now say "needs
+MPP >= `905020444`" instead of describing a local patch.
+
+Worth remembering how that went, because it is repeatable: the report led with `/proc/interrupts`
+showing one IRQ per submitted frame while MPP claimed "not done". That is what turned "this TV box
+can't encode H.264" into a located bug in their code, and it took a day.
+
+### 2026-08-13 — the wandering IP, and why the kernel was never at fault
+
+The box kept landing on a different address after every reboot, and eventually stopped answering to
+`r69-xr821` at all. Two separate things, and the SD card settled both — read on the Mac with
+`debugfs`, no box required.
+
+**The address moves because the Wi-Fi MAC does.** Four boots in one `/var/log/syslog`, four leases:
+
+| boot | `wlan0`             | lease         |
+| ---- | ------------------- | ------------- |
+| 1    | `88:00:33:77:71:03` | 192.168.1.225 |
+| 2    | `88:00:33:77:8d:e8` | 192.168.1.226 |
+| 3    | `88:00:33:77:4f:9a` | 192.168.1.227 |
+| 4    | `88:00:33:77:6d:3f` | 192.168.1.228 |
+
+`CONFIG_WIFI_GENERATE_RANDOM_MAC_ADDR` was supposed to have fixed this, and it is set. It does
+nothing here. The symbol only gates `get_wifi_addr_vendor()` inside `net/rfkill/rfkill-wlan.c`,
+which a driver has to opt into by calling `rockchip_wifi_mac_addr()` — and `aic8800_sdio` never
+does. Its call site is real but sits behind `CONFIG_USE_CUSTOMER_MAC`, hard-coded `n` in the
+driver's own Makefile, and `CONFIG_PLATFORM_ROCKCHIP`, which nothing in this kernel defines. Not one
+`rfkill-wlan` line appears in a boot log; that grep is what proved it rather than argued it.
+
+So the address comes from `rwnx_send_get_macaddr_req()` — the firmware — and with no MAC in efuse it
+answers with the vendor base plus two random octets. The tell was in the source all along:
+`dflt_mac[] = { 0x88, 0x00, 0x33, 0x77, 0x10, 0x99 }` in `rwnx_main.c`, first four octets identical
+to every address above.
+
+The fix is `wireless-aic8800-persistent-mac.patch`: call `rockchip_wifi_mac_addr()` from the in-tree
+path, gated on `CONFIG_RFKILL_RK` (which is what actually builds it, and is already `=y`), leaving
+the firmware request as the fallback so a board without vendor storage doesn't fall through to one
+fixed address shared by every box. Vendor storage works here — U-Boot used the same store to persist
+`LAN_MAC`, which is exactly why `end0` has been stable all along while `wlan0` was not.
+
+Compile-verified in the Armbian build; **not yet confirmed on hardware**, which needs three boots
+reading `/sys/class/net/wlan0/address`.
+
+**The box going offline was not a crash.** Worth writing down because the first instinct was to
+suspect the new kernel. The evidence says otherwise, in order:
+
+- `/var/lib/systemd/pstore/console-ramoops-0` ends `reboot: Restarting system` — the previous boot
+  shut down cleanly, no panic, no watchdog bite.
+- The last boot's log carries only the noise this board always prints (HDMI EDID reads, absent
+  regulator lookups, `rkvdec2_init: failed on clk_get`), nothing new.
+- The persistent journal names the trigger outright:
+  `sudo[2006]: art : COMMAND=/usr/bin/systemctl reboot` at 02:50:06, followed by an orderly shutdown
+  — `armbian-ramlog` synced, journald flushed.
+- And then nothing. No journal entry, no syslog line, no fresh pstore archive. The SD records no
+  successful boot after that reboot.
+
+Which leaves the one question the card cannot answer: whether the box failed to come back, hung
+before userspace got far enough to write anything, or simply booted from eMMC instead. Serial would
+have said, and this is the second time that has been the answer — it is a **prospective**
+instrument, and attaching it after the fact shows nothing.
+
+**Same day, second pass — stop storing it, derive it.** The first fix made the driver call
+`rockchip_wifi_mac_addr()`, which generates once and persists to vendor storage. Two objections
+killed that design, both correct.
+
+The first: the whole thing rests on `rk_vendor_write()` landing, and `emmc_vendor_write()` **ignores
+the return value of the eMMC transfer** — a write that never reached the card still reports success
+and logs nothing. The store itself is healthy (four copies at sector 7168 all validate, the version
+counter walks 2→3→4→5 across them, 64376 bytes free), but a correctness argument that ends in "and
+the write probably worked" is not one.
+
+The second: `eth_random_addr()` mints a locally-administered `02:…`, throwing away the vendor OUI
+the chip would otherwise present.
+
+Both vanish if the address is **derived** rather than stored. `rockchip-cpuinfo` already reads the
+16-byte `otp_id: id@a` cell on `otp@ffce0000` and folds it into `system_serial_high`/`_low`, both
+`EXPORT_SYMBOL`ed from `arch/arm64/kernel/cpuinfo.c` — this box has been printing
+`Serial : e7b0656439babdb6` every boot all along. So when the firmware answers with its own default
+base (the tell that efuse holds nothing), keep the OUI and take the tail from there. Per-die, stable
+by construction, identical from SD and from eMMC, nothing written anywhere.
+
+Two config consequences: `ROCKCHIP_CPUINFO` moves from `=m` to `=y`, because two modules racing to
+probe is not a contract; and `WIFI_GENERATE_RANDOM_MAC_ADDR` is dropped, since it would win over the
+derivation and hand back the `02:…` random address instead.
+
+The lesson for the next board is in [AGENTS.md](../../AGENTS.md#derive-the-address-dont-store-it):
+prefer efuse, then the SoC OTP id, and only then a store that has to be written.
+
+**Same day, third pass — the randomness was ours, not the firmware's.** The derivation shipped and
+the address kept moving. Right kernel, matching `srcversion`, no DKMS copy, `rockchip-cpuinfo` at
+6.76 s against Wi-Fi at 23 s, serial reported, and the shipped `.ko` disassembled to exactly the
+code written. All true, none of it the answer.
+
+Raising `aicwf_dbg_level` (it defaults to `LOGERROR`, which is why the line had never appeared)
+settled it:
+
+```
+[   22.866458] AICWFDBG(LOGINFO)	get macaddr: 00:00:00:00:00:00
+```
+
+The firmware returns **zeros**, not its default base, so `memcmp(mac_addr_efuse, dflt_mac, 4)` could
+never match. The driver falls through to `dflt_mac[]`, whose last two bytes `get_random_bytes()`
+filled ~250 lines earlier. Seeding `dflt_mac[]` from the OTP id instead covers every fallback path;
+three cold boots now give `88:00:33:65:64:b6` and one lease.
+
+Two wrong root causes in a row, both from reading source and reasoning forwards. Instrument the
+decision point first — and check whether a silent driver is merely gagged.
+
+**Bluetooth, for contrast:** stable `BD_ADDR` `0B:3B:22:AC:88:20` on the same chip. Not burned in
+either — `0x0B` has the I/G bit set, and the bytes are in none of the AIC firmware blobs. What is
+burned in is RF trim (`PWROFST`, `DRVIBIT`, `USRDATA`, `SDIOCFG`, `USBVIDPID` — no MAC region). BT
+cannot operate without an address so its firmware derives one; Wi-Fi can take a host-supplied MAC,
+so nobody bothered. Whether two units collide is untested. If it bites:
+`HCI_QUIRK_USE_BDADDR_PROPERTY` and `local-bd-address` on the serdev node (`hci_sync.c`).
+
+### 2026-08-14 — power measured bare, and sleep wins
+
+Three states on the Armbian build, meter on the DC input, **no HDMI and no USB attached**:
+
+| State            | Power         | Back to usable |
+| ---------------- | ------------- | -------------- |
+| idle, after boot | **1.1–1.2 W** | —              |
+| suspended        | **0.3 W**     | instant        |
+| off (poweroff)   | **0.4–0.5 W** | ~17 s          |
+
+The 2026-08-11 set (1.5 / 0.7–0.8 / 0.8–0.9 W) was taken with a USB device plugged in and probably
+HDMI, so the two are not comparable and the drop is not a property of the build.
+
+**This reverses the earlier conclusion.** That entry said "off costs about the same as sleep, or
+more", and made `HandlePowerKey=suspend` merely defensible. Measured bare, suspend is the cheapest
+state _and_ the fastest to return from: 0.3 W and instant, against 0.4–0.5 W and a 17 s cold boot.
+The shape makes sense — suspend runs every driver's `.suspend()` and parks DDR in self-refresh via
+PSCI, while `rockchip,virtual-poweroff` halts with the rails up and drivers only get `.shutdown()`.
+
+**On dropping rails ourselves, the standards answer is one-sided.** Eight rails are
+`regulator-always-on` in the factory tree — `dc_12v`, `vcc5v0_sys`, `vcc5v0_host`, `vdd_cpu`,
+`vdd_0v9_s3`, `vdd_1v8_s3`, `vcc_3v3_s3`, `vcc_ddr_s3` — and the USB host 5V (`vcc5v0_host`,
+gpio4.13) carries `regulator-always-on` verbatim from `stock/r69/board.dts`, so stock Android leaves
+USB powered in "off" too. HDMI has no switchable rail at all: no HDMI supply reference exists in the
+tree.
+
+- **Suspend has a standard mechanism** — `regulator-state-mem { regulator-off-in-suspend; }`, used
+  by 130 Rockchip boards in-tree. Our tree has **none**. It is the correct place to drop a rail.
+- **Poweroff has none.** The regulator bindings define suspend states only; there is no
+  shutdown-state property. Cutting a rail at poweroff means a driver `.shutdown()` or a userspace
+  hook — the split across layers [AGENTS.md](../../AGENTS.md) forbids.
+
+Which lands on the honest recommendation: do not fight `virtual-poweroff` on a PMIC-less board.
+Prefer the state the hardware is good at. Open decision: whether to ship `HandlePowerKey=suspend`,
+given the plan had dropped that drop-in as "asserts systemd's own default" — it no longer does, and
+the measurement is the reason to reconsider.
+
+### 2026-08-14 — the power key's long press works, but only over BLE
+
+`HandlePowerKey=suspend` was easy once the power numbers were in. The force-off half took a detour
+worth recording, because the answer was in the remote, not in the config.
+
+Holding the key over **IR** never reached systemd's long press. `evtest` on the IR node explains it:
+however long the button is held, the release arrives about 2 s in, so logind runs the short action.
+The driver has no cap of its own — its timer is re-armed 130 ms after each NEC repeat frame — so it
+is the repeats that stop. And the threshold is not adjustable: `logind.conf` exposes the
+`*LongPress=` actions but no duration, systemd hardcoding 5 s in `logind-button.c`.
+
+Two dead ends were considered and dropped. Patching the driver cannot make a remote transmit longer.
+Remapping a labelled button to `KEY_RESTART` and setting `HandleRebootKey=poweroff` does work — the
+key table lives in the DTB, and the driver never reports `MSC_SCAN`, so udev's keymap has nothing to
+remap — but a button printed "Google Play" that silently powers the box off is worse than no button.
+
+**Pairing over BLE settles it.** The remote is one mode at a time: connected over BLE it stops
+transmitting IR entirely. Its `Bluetooth remote Consumer Control` node (the only BLE node declaring
+`KEY_POWER`; the other two are the air-mouse and a keyless vendor node) is plain HID, so the key
+holds until released and the 5 s long press fires normally.
+
+So the shipped policy is `HandlePowerKey=suspend` + `HandlePowerKeyLongPress=poweroff`: tap sleeps,
+hold powers off, and the hold half is live only while the remote is paired. `systemctl poweroff`
+works either way.
+
+**The two directions use different radios.** Bluetooth is dead in suspend and in "off", so only the
+IR receiver is armed as an ATF wake source: waking is always IR. The remote handles the switch
+itself — BLE while connected, IR once the link is gone, which is precisely when the box is asleep.
+So a paired remote both powers the box off (long press over BLE) and wakes it (IR), with no bond to
+remove. The only practical consequence is line of sight: waking needs the remote pointed at the box.
+
+### 2026-08-14 — Wake-on-LAN: the PHY is inside the SoC, so it cannot work
+
+`ethtool` advertises `Supports Wake-on: ug`, which is what sent this down a two-hour path. Arming it
+was straightforward and entirely ineffective: `ethtool -s end0 wol g`,
+`/sys/class/net/end0/device/power/wakeup` reading `enabled`, and `stmmac: wakeup enable` logged at
+suspend — then ten magic packets, unicast and broadcast, on ports 9/7/0, with the box sitting in
+`PM: suspend entry (deep)`. No wake, twice.
+
+The `dmesg` line that looked like the answer was
+`rockchip-suspend not set wakeup-config for mem-lite`. The RK3528 header does define
+`RKPM_GMAC_WKUP_EN` (BIT 8), and the factory tree ships `rockchip,wakeup-config = <0x11>` —
+`RKPM_CPU0_WKUP_EN | RKPM_GPIO_WKUP_EN` — so GMAC wake genuinely was not routed to the power
+controller. Setting `0x111` and rebuilding changed nothing, and the graft was reverted: a graft
+needs a functional consumer.
+
+The real reason is one property in the PHY node. WoL needs the **PHY** alive while the MAC sleeps,
+since the PHY is what sees the magic packet and raises the PMT interrupt. Ours is
+`phy-is-integrated` — an in-SoC FEPHY (`ethernet-phy-id0044.1400`) with no `phy-supply` to hold up —
+so deep suspend takes it down with the rest of the die. The MAC node was never the problem: it
+already carries `interrupt-names = "macirq", "eth_wake_irq"`, the PMT interrupt that the RK3288 WoL
+series had to add.
+
+Two pieces of corroboration. Across the 80 Rockchip boards in this BSP, the wake sources actually
+enabled are GPIO (76), CPU0 (27), USB (25), cluster and PWM — `RKPM_GMAC_WKUP_EN` is used by
+**none**. And the platforms where Rockchip WoL is documented working (RK3288, RK3568 guides) all
+drive **external** PHYs with their own regulator, which is exactly the thing this board lacks.
+
+So `board.md`'s existing warning stands, now with a mechanism rather than an observation: no RTC, no
+WoL, and a suspended box is stranded until someone presses the remote.
+
+### 2026-08-14 — the way back, proven before it was needed
+
+The DDR gate (does a stock rkbin blob train this DRAM?) is the last untested thing in the port, and
+testing it means putting an unproven loader where the working one lives. That is only a sane
+experiment if the recovery path is known good, so it was proven first.
+
+`build-rktools.sh` builds `rkdeveloptool` into `tools/` (gitignored) from a pinned upstream commit.
+Two things it has to get right on macOS: Homebrew keeps `libusb` off the default search path, so
+`PKG_CONFIG_PATH` needs pointing at it; and upstream compiles `-Werror` while using C++ VLAs, which
+clang refuses — allowed with `-Wno-error=vla-cxx-extension` rather than dropping `-Werror`
+wholesale. It builds **natively on purpose**: USB devices do not pass through to containers on
+macOS, so a containerised binary would compile and never reach the box.
+
+With the box held in maskrom by the AV-jack button:
+
+```
+DevNo=1	Vid=0x2207,Pid=0x350c,LocationID=101	Maskrom
+```
+
+`rci` returns "Read Chip Info failed!", which is correct rather than broken — the read/write verbs
+need a USB loader running, sent with `db`; bare maskrom only answers enumeration.
+
+Worth noting what this corrected: the original recon entry claimed there was **no** reset button in
+the AV jack, which made maskrom look like it needed luck. There is one, it works, and the whole
+recovery chain — trigger, enumeration, host tool — is now verified rather than assumed. That is now
+a "Done means" criterion in [AGENTS.md](../../AGENTS.md#done-means): untested recovery is not
+recovery.
+
+### 2026-08-17 — the submission tree wired ethernet to the PHY, and the gate was built not to see it
+
+Chasing a Wi-Fi latch, the DTB regeneration looked like the culprit. It was not: every reference in
+the SDIO node resolves (`mmc-pwrseq` → `/sdio-pwrseq`, `pinctrl-0` → the three `sdio1` groups), and
+an early claim that they dangled came from `find` not following the `/proc/device-tree` symlink. A
+control lookup on a known-good phandle killed that theory. What the search did turn up was a real
+defect one layer over, in the upstreaming tooling.
+
+`snps,axi-config`, `snps,mtl-rx-config` and `snps,mtl-tx-config` reach the controller's own
+`stmmac-axi-config` / `rx-queues-config` / `tx-queues-config` subnodes by bare phandle. dtcx's
+property table did not list them, so they decompiled as numbers, and `gen-overrides.py` copied the
+numbers into the include-based tree — which allocates its own phandles:
+
+| property                     | factory tree             | submission tree |
+| ---------------------------- | ------------------------ | --------------- |
+| `gmac0` `snps,axi-config`    | `gmac0_stmmac_axi_setup` | `spdifm0_pins`  |
+| `gmac0` `snps,mtl-rx-config` | `gmac0_mtl_rx_setup`     | `rmii0_phy`     |
+| `gmac0` `snps,mtl-tx-config` | `gmac0_mtl_tx_setup`     | `macphy_bgs`    |
+| `gmac1` `snps,axi-config`    | `gmac1_stmmac_axi_setup` | `sdio1_bus4`    |
+| `gmac1` `snps,mtl-rx-config` | `gmac1_mtl_rx_setup`     | `sdio1_cmd`     |
+| `gmac1` `snps,mtl-tx-config` | `gmac1_mtl_tx_setup`     | `sdio1_clk`     |
+
+stmmac resolves those, finds no queue subnodes and fails `-EINVAL`.
+
+The gate said `VERIFIED` throughout, because it stripped every `phandle = <` line before diffing.
+That drops the definitions, which is where the two trees disagree, and keeps the literals, which are
+the same text in both. The one class of error it had to catch was the one class it filtered out.
+
+The deployed blob was never affected: `firmware/r69/board.dtb` carries the factory numbering, where
+`0x71` is the queue-config node. Only the include-based submission was wrong — which is what PR 528
+shipped.
+
+Auditing the rest of the table against `rk3528.dtsi` found the mirror-image error.
+`rockchip,taskqueue-node` and `rockchip,resetgroup-node` are MPP **indices** (`<0>` … `<4>`), not
+phandles; listing them made dtcx invent `&cru`, `&cpu0`, `&gic` from the index value. Neither
+direction shows up in a round trip — the value recompiles to the same number in the same tree — so
+`make test` passed the whole time. Every other vendor entry checked out.
+
+Fixed: dtcx patch 0001 no longer claims the two index properties, new patch 0005 adds the three
+stmmac ones, `scripts/check-refs.py` fails the build if a name seen as `<&label>` anywhere also
+appears as a bare cell list, and `scripts/remap-phandles.py` translates the native tree's phandle
+values onto the patched tree's by node path so the diff compares every line including them. Both
+trees come out identical that way, 0 nodes unmatched — they differ only in the order nodes are
+written. Both boards' `&gmac0` overrides disappeared entirely once the properties compared equal to
+the reference dtsi. `board.dtb` is byte-identical before and after; only the source text changed.
+
+### 2026-08-17 — the annotated submission file, and the comments that were never true
+
+Rechecking every per-block comment in `armbian-native-annotated.dts` against the reference dtsi and
+the factory tree:
+
+| comment                                        | what the block does                                                                           |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| serial comes from a different OTP cell         | appends a fourth cell, `cpu-code1`; the serial is `otp_id` and is untouched                   |
+| the OTP cell /cpuinfo reads for the SoC serial | the same cell, the same error                                                                 |
+| no vendor boot logo (×2)                       | `logo,kernel` and `logo,uboot` still set; `logo,mode` goes center → fullscreen                |
+| no vendor boot logo, nothing to reserve        | `drm-logo@0` untouched; the block adds an 8 MB CMA pool                                       |
+| mainline lima expects bus/core                 | real, but it lives in `armbian.patch`; this block only repoints `mali-supply` at the one rail |
+| one voltage bin, not the reference spread (×5) | true for three; `opp-1416000000` keeps six bins and gpu `opp-800000000` seven                 |
+
+The rest restated the code — `unwired`, `enabled in the factory tree`, `Wi-Fi pins as routed here`.
+
+The cause is structural, not carelessness. Those overrides describe the **vendor's** board, and the
+vendor shipped a blob with no reasons in it. A rule asking for one comment per block asks for
+reasons that do not exist, so they got invented — and an invented reason reads exactly like a
+checked one.
+
+The file was the other half of it: a hand-maintained copy of generated output, kept only to hold
+those comments. Deleted. `build.sh` now emits `armbian-native.dts` as `header.dts` plus the
+generated overrides and compiles that, so the submission has no second copy to drift from. Per-board
+source is `armbian.patch` and `header.dts`, nothing else.
+
+The deliberate departures from the factory tree are knowable — they are the patch — so they moved
+into `header.dts`, one line each, checked against it. The commit message points there instead of
+repeating the list.
+
+Corrected while checking: the commit message claimed the trees share 581 nodes. Measured 580, from
+598 in the reference and 593 here.
+
+### 2026-08-17 — the broken submission was what the box actually booted
+
+This box runs the upstreamable Armbian from SD, so its tree comes from `linux-dtb-vendor-rk35xx`,
+built from the submitted DTS — not from `firmware/`. Decompiling the blob it was booting:
+
+```
+snps,axi-config   = <&spdifm0_pins>
+snps,mtl-rx-config = <&rmii0_phy>
+snps,mtl-tx-config = <&macphy_bgs>
+```
+
+and in the kernel log:
+
+```
+rk_gmac-dwmac ffbd0000.ethernet: Not all RX queues were configured
+rk_gmac-dwmac: probe of ffbd0000.ethernet failed with error -22
+```
+
+So the phandle defect was never theoretical and never in `firmware/` — it shipped, and this box had
+no ethernet because of it. The overlay tree was fine throughout, which is why the fault looked
+invisible from the repo.
+
+Installed the rebuilt `upstream/r69-xr821/armbian-native.dtb` (md5 `01ce4a99`) over the packaged
+one, keeping the original beside it as `.known-good`, and rebooted. After:
+
+| check        | result                                                          |
+| ------------ | --------------------------------------------------------------- |
+| stmmac probe | ✅ clean, no `-22`                                              |
+| `end0`       | ✅ present, `PHY [stmmac-0:02] driver [RK630 PHY]`              |
+| Bluetooth    | ✅ `hci0`, UART                                                 |
+| LEDs         | ✅ `power`, `standby`                                           |
+| VPU          | ✅ `/dev/mpp_service`, `/dev/rga`, `renderD128/129`             |
+| IR           | ✅ `rc0`                                                        |
+| link traffic | 🟡 no cable attached — probe and PHY bind verified, not traffic |
+
+Two caveats. The DTB is package-owned, so an `apt` upgrade of `linux-dtb-vendor-rk35xx` puts the
+broken one back until PR 528 lands. And `/proc/device-tree/compatible` shows two entries where the
+source has four — u-boot rewrites the tree it hands Linux, which is exactly why the factory blob is
+carved from eMMC and never read off a running box.
+
+### 2026-08-20 — the R69 has been on 5 GHz all along; `board.md` said it never had
+
+Correction to a claim that had been sitting in `board.md`'s known gaps: "**Wi-Fi 5 GHz** association
+(only 2.4 GHz has ever linked here)". False. `cnc` (this board, `board-id` = `r69`) is associated on
+5 GHz and has been for the two days of its current uptime:
+
+```
+bssid=<redacted-bssid>          wifi_generation=6
+freq=5200                        key_mgmt=SAE   pmf=1
+ssid=<redacted-ssid>                   wpa_state=COMPLETED
+```
+
+Channel 40, Wi-Fi 6, WPA3-SAE, −51 dBm (`/proc/net/wireless`), driver `aicwf_sdio`. The PHY rate was
+not captured — `iw` is not installed on that box and the AIC driver exposes no `/proc` node for it,
+so only the association is recorded, not throughput.
+
+**How the wrong claim survived.** It was never measured either way; the 2.4 GHz figure in the
+measured table was real, and "only 2.4 GHz has ever linked here" was written as the complement of it
+rather than as an observation. A negative claim about hardware needs its own evidence — absence of a
+measurement is not a measurement of absence. The README's `Wi-Fi 5 GHz ✅` for this board had been
+right; a sweep "corrected" it to 🟡 to match the board doc, propagating the error rather than
+catching it. Sweeps should reconcile a doc against the box, not against another doc.
+
+Incidental confirmation while reading `wpa_cli status`: `address=8a:00:33:fc:16:a0` against the
+chip's own `p2p_device_address=88:00:33:77:4e:51`. `wlan0` is the derived address, from the
+`wlan0 8a:00:33` line in `firmware/r69/mac-oui` — that prefix already carries the
+locally-administered bit, and `rk35xx-mac-pin` sets it again regardless. The unpinned p2p address
+shows the AIC's raw `88:00:33`, which is not a registered OUI.
+
+### 2026-08-20 — documentation verified against the running box, two corrections
+
+Queried `cnc` read-only and checked every claim in `board.md` and `board-validation.md` that a live
+box can settle. Confirmed as documented:
+
+| Claim                            | Box                                                                |
+| -------------------------------- | ------------------------------------------------------------------ |
+| stable input paths               | `ir-remote → event5`, `adc-keys → event4`                          |
+| watchdog armed by systemd        | `Using hardware watchdog 'Synopsys DesignWare Watchdog'`           |
+| vendor PHY bound                 | `RK630 PHY`, not Generic                                           |
+| `end0` on the label address      | `c4:2a:fe:10:51:77`, matching `rk35xx-vendor-storage lan`          |
+| modules-load                     | `rockchip_pwm_remotectl_rk35xx` + `rk630phy`, both in `lsmod`      |
+| VPU nodes reachable unprivileged | `/dev/mpp_service` and `/dev/rga` both `660 video`                 |
+| factory OPP table                | `scaling_available_frequencies` = `1200000 1416000`                |
+| deep sleep                       | `s2idle [deep]`                                                    |
+| the 1.5 GB ceiling               | `free -m` total 1465                                               |
+| runs from eMMC                   | root `/dev/mmcblk2p1`, the disk with `boot0`/`boot1`               |
+| boot time                        | 16.4 s (4.07 kernel + 12.33 userspace) against a documented ~17 s  |
+| identity + banner                | `BOARD_NAME="R69 XR821_V1.1"`                                      |
+| `grep -c rfkill-wlan` on the log | `0`, the documented answer meaning vendor storage is not consulted |
+
+**Two corrections.**
+
+`board.md` said "Two entries under `/sys/class/leds/`". There are three — `power`, `standby` and
+`mmc2::`. The third is registered by the eMMC host at `ffbf0000.mmc` and appears nowhere in our tree
+(`grep -c mmc2` on the shipped `board.dtb` is 0); it drives no physical LED. The docs now name the
+two board LEDs rather than counting the directory.
+
+`board-validation.md` said "the AIC8800 exposes `bustx_thread_prio` and `busrx_thread_prio`" without
+saying where. They are real but live under `/sys/module/aic8800_fdrv/parameters/` — not
+`aicwf_sdio`, which is the bus driver name `wlan0` reports and is not a loaded module at all. The
+loaded pair is `aic8800_fdrv` + `aic8800_bsp`.
+
+`end0` reads `speed -1`, `duplex unknown` — no cable on this box, which lives on 5 GHz. Not a
+regression; the 100FD figure in `board.md` was measured with a cable attached.
+
+### 2026-08-21 — the watchdog timeout was never fixed at 44 s; we shipped half the window
+
+`rk35xx-watchdog.conf` had claimed since it was written that "the hardware timeout is fixed at 44 s
+and cannot be changed", and shipped `RuntimeWatchdogSec=30` to sit under it. Both wrong. Traced from
+a sibling RK3518-class box's watchdog write-up, then confirmed against this board.
+
+dw-wdt steps are `2^(16 + TOP) / clk`. `clk_summary` on the R69:
+
+```
+tclk_wdt_ns   1  1  0  24000000  ...  ffac0000.watchdog  tclk
+```
+
+24 MHz, so `2^30/24e6` = 44.7 s (TOP 14) and `2^31/24e6` = **89.5 s** (TOP 15). Two useful steps,
+not one, and we were on the lower.
+
+**Why it matters, and it is not cosmetic.** The watchdog cannot be stopped once armed and keeps
+counting across a soft reboot, so `shutdown + boot` has to finish inside what is left of the window.
+On the sibling box that budget ran out: ramoops caught `watchdog: watchdog0: watchdog did not stop!`
+immediately before `reboot: Restarting system`, the next boot was reset at 15.91 s monotonic, and it
+stayed dark six hours until power was pulled. Not reproduced here — 🟢, same SoC and same block.
+
+Fixed the payload to `RuntimeWatchdogSec=80` and applied it to `cnc` in place (`install` the drop-in
+
+- `systemctl daemon-reexec`, no reboot):
+
+```
+Watchdog running with a hardware timeout of 1min 29s.
+```
+
+Afterwards: 0 failed units, `cncjs` active, uptime unbroken at 2 d 12 h. The H96 Max carries the
+same config and gets it on the next deploy; it was not touched.
+
+Also worth knowing: `RebootWatchdogUSec=10min`, systemd's default shutdown window, is unreachable —
+the driver clamps to 89 s, so systemd believes it has ~7× the protection the hardware can give.
+
+**How the wrong claim survived.** It was written into a payload comment, then copied into
+`board-bringup.md` during a docs sweep because the comment was treated as the source of truth. One
+`clk_summary` read would have settled it at any point. A hardware constant in a comment is a claim
+like any other and needs its arithmetic shown.
+
+### 2026-08-21 — the watchdog does not fire on resume; whether it counts in sleep is still open
+
+Two questions were being conflated. Separated and answered what the evidence covers.
+
+✅ **It does not fire on wake.** This box suspended and resumed with the watchdog armed, and never
+reset:
+
+```
+Aug 18 19:54:31  Watchdog running with a hardware timeout of 44s
+Aug 18 20:49:24  PM: suspend entry (deep)
+Aug 18 20:49:28  PM: suspend exit
+```
+
+Still one boot in `journalctl --list-boots`, `boot_id` unchanged, `uptime -s` still 19:54:38 three
+days on. The resume path runs identically whatever the sleep length, so a 4 s sleep exercises it
+completely — the duration only decides whether the counter expires _during_ sleep, which is a
+different question.
+
+The driver makes that ordering deliberate. `dw_wdt_resume()` restores `TIMEOUT_RANGE` first — it
+carries TOPINIT, so enabling loads the full window instead of a hardware default — then restores
+`CONTROL` to re-enable, then `dw_wdt_ping()`s. The counter starts from the top at resume with the
+whole window left for the rest of the resume and systemd's first ping. Proven at 44 s; the margin at
+89 s is strictly larger.
+
+🟢 **Whether it counts through sleep is still unproven.** `dw_wdt_suspend()` gates both
+`tclk_wdt_ns` and `pclk`, which should stop the counter, and that gating is load-bearing because
+userspace is frozen and systemd cannot ping. But 4.2 s is the longest suspend ever recorded with the
+watchdog armed, well under even the 44 s step. The 2m42s H96 Max suspend that looks like proof is
+dated 2026-08-08, one day before the watchdog shipped.
+
+Test recorded in `watchdog.md`: sleep 2 min, watch from the host, and note it needs hands at the box
+— there is no RTC, so a correctly-behaving watchdog leaves the box asleep until someone presses the
+remote. Success is what strands it.
+
+### 2026-08-21, later — correction: the 4 s suspend proves nothing about the watchdog
+
+The entry above claimed ✅ "it does not fire on wake" on the strength of the 2026-08-18 suspend,
+reasoning that the resume path runs identically however long the box slept. The code path does. The
+**counter's remaining value does not**, and that is the variable that decides.
+
+At 44 s systemd pinged every 22 s, so at suspend entry the counter held 22–44 s. After 4.2 s of
+sleep it held ~18–40 s **whether or not the clock was gated** — nowhere near expiry either way, so
+nothing could have fired. The run is equally consistent with both hypotheses and discriminates
+neither.
+
+The two questions are also one experiment, not two. If the clock is not gated the counter expires
+around 89 s into sleep; whether that surfaces as a reset _during_ sleep or as one landing on the
+wake path depends on whether the reset is masked while the SoC is in deep suspend. Only a sleep
+longer than the window produces either.
+
+Downgraded to 🟢 in `watchdog.md`, merged back into a single question with a three-outcome table
+that tells the two failure shapes apart.
+
+### 2026-08-21, evening — settled: the watchdog is gated in sleep, and does not misfire on wake
+
+Ran the test properly this time. Watchdog armed at 89 s, box idle (cncjs holding `/dev/ttyUSB0` but
+no job streaming, load 0.04, no sleep inhibitors). Suspend scheduled through a transient
+`systemd-run --on-active=20` unit so the SSH session was gone first — an active session interferes
+with _entering_ suspend, per the 2026-08-17 entry.
+
+```
+18:46:16.818  PM: suspend entry (deep)
+18:55:02.966  PM: suspend exit          -> 526.1 s, 5.9x the 89.5 s window
+```
+
+- `boot_id` **unchanged** — `196099eb-194c-4204-b58e-a8430f16fba9` before and after.
+- `uptime -s` still 2026-08-18 19:54:38; one boot in `journalctl --list-boots`.
+- Polled from the host every 2 s throughout: unreachable from 18:46:19 until the remote press, so it
+  never self-reset and rebooted.
+- After resume systemd still owns `/dev/watchdog0` (`wdctl` reports it busy) at
+  `RuntimeWatchdogUSec=1min 20s` — resume re-arms rather than silently dropping protection.
+- 0 failed units, `cncjs` active.
+
+That closes both halves at once. The counter cannot advance with `tclk_wdt_ns` gated, and
+`dw_wdt_resume()` restoring `TIMEOUT_RANGE` (with TOPINIT) before re-enabling `CONTROL` and then
+pinging means the wake path starts from a full window. **Suspend costs nothing from the budget; only
+a soft reboot carries it forward.**
+
+Incidental: `xhci-hcd xhci-hcd.4.auto: xHC error in resume, USBSTS 0x401, Reinit` on resume here too
+— the same benign warning already recorded on the H96 Max (0x411 there). The controller
+reinitialises and USB works.
+
+Still 🟡 on the H96 Max, which was not touched.
+
+### 2026-08-21 — why U-Boot hands over the wrong MAC: we build mainline, which has no vendor storage
+
+Chased the `36:c8:c4:28:e4:08` on `end0`. The standing explanation — U-Boot read the vendor store on
+its _boot device_, found no `LAN_MAC` on the SD and invented one — does not hold: this box boots
+from eMMC, whose store has `LAN_MAC = c4:2a:fe:10:51:77`, and it still handed the kernel `36:…`.
+
+The real cause is our own build. Vendor storage is a Rockchip downstream driver and we ship
+**mainline** U-Boot, so there is nothing to read `LAN_MAC` with:
+
+```
+strings -a firmware/common/u-boot.itb | grep -iE 'vendor.?storage|LAN_MAC|rockchip_set_ethaddr'
+-> only the generic "ethaddr" variable name
+```
+
+What sets it is `rockchip_setup_macaddr()` in `arch/arm/mach-rockchip/board.c`: SHA256 of the OTP
+`cpuid#`, first six bytes, `mac_addr[0] &= 0xfe` then `|= 0x02`. `0x36` has the multicast bit clear
+and the LA bit set, exactly that masking. `CONFIG_HASH`, `CONFIG_SHA256` and `CONFIG_ROCKCHIP_OTP`
+are all `y`, so the path is live.
+
+**It is deterministic, not random.** `net_random_ethaddr()` exists only as an `eth-uclass.c`
+fallback for a device with no valid address, and is never reached because `ethaddr` is set first.
+Three docs claimed U-Boot "invents one with `net_random_ethaddr()`" and writes it back to vendor
+storage — that is Rockchip's _vendor_ U-Boot, not what we ship. Corrected in `board-validation.md`,
+`armbian-install.md` and `upstream.md`.
+
+Consequence for `armbian-install.md` in particular: after a wipe our U-Boot cannot recreate `DVKR`
+at all, so the old "a fresh store holding a random MAC already exists before userspace runs" is
+wrong here — there is simply no store until the window is restored from the dump.
+
+**Two routes would let U-Boot get it right, neither free.** `rockchip_setup_macaddr()` returns early
+`if (env_get("ethaddr"))`, so a pre-set `ethaddr` wins — but `CONFIG_ENV_IS_NOWHERE=y`, there is no
+persisted environment to put it in, and adding `CONFIG_ENV_IS_IN_MMC` means finding space in the
+reserved window. Otherwise we carry a vendor-storage patch on mainline. Left alone for now:
+`rk35xx-mac-pin` already lands the label address, and the address U-Boot picks meanwhile is stable,
+so nothing churns between boots.
+
+### 2026-08-21 — Rockchip's own U-Boot would not fix the MAC either
+
+Checked whether switching to the vendor tree solves `end0`. It does not, and the evidence is already
+on the box: Armbian's `linux-u-boot-rock-2f-vendor` (the package we hold) ships its own defconfig
+and build metadata under `/usr/lib/linux-u-boot-vendor-rock-2f/`.
+
+It is unmistakably the downstream fork — `CONFIG_ANDROID_BOOTLOADER=y`, `CONFIG_ANDROID_AVB=y`,
+`CONFIG_CMD_BOOT_ANDROID=y`, and
+`CONFIG_SPL_FIT_GENERATOR="arch/arm/mach-rockchip/make_fit_atf.sh"`, a mechanism long gone from
+mainline.
+
+Two things settle it:
+
+- `CONFIG_ROCKCHIP_VENDOR_PARTITION=y` and `vendor_storage_init` in its `u-boot.itb`, so it **can**
+  read the store — but `# CONFIG_ROCKCHIP_SET_ETHADDR is not set`, so it never turns `LAN_MAC` into
+  `ethaddr`. Reading the store and using it for the MAC are separate switches, and Armbian enables
+  only the first.
+- `UBOOT_TARGET_MAKE='BL31=…/rk3528_bl31_v1.17.elf …'` — this is the direct evidence for the
+  long-standing "the stock ROCK 2F loader is too old" claim, which until now named no version. v1.17
+  predates RK3518, hence `Unknown SoC`.
+
+So the vendor tree costs us `distro_bootcmd` and a working BL31, and buys nothing on the MAC.
+`docs/uboot.md` now names v1.17 with its source instead of hedging.
+
+### 2026-08-25 — the A-to-A cable cannot power the box, so the recovery order stands
+
+Question raised on the README's maskrom steps: should the sequence be hold-button-then-plug-USB,
+with the cable powering the box, rather than hold-button-then-apply-power?
+
+No — and the tree settles it. `vcc5v0_otg` on both boards is a `regulator-fixed` with
+`vin-supply = <&vcc5v0_sys>` behind a GPIO enable (gpio4.18 on the R69, gpio4.12 on the H96 Max).
+VBUS on the OTG connector is therefore **sourced by the box from its own 5 V rail, through a switch
+the box controls** — an output, not an input. Host VBUS arriving on that pin meets the output of a
+load switch whose input is the board rail, so the cable carries data only and the box still needs
+its PSU. (`vcc5v0_host` is the same shape but `regulator-boot-on` + `regulator-always-on`.)
+
+Searching around confirms this is board-dependent in general — some Rockchip devices do run off the
+A-to-A, others need the supply as well — so it was worth checking rather than copying a generic
+recipe.
+
+The worklog never recorded which power source the 2026-08-14 proving run used, only "held at
+power-on" and the `2207:350c` enumeration. The hardware answers it regardless. README now states the
+cable is not a power source and gives the order explicitly, so the step does not get "corrected"
+into something that cannot work.
