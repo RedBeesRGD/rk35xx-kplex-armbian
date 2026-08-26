@@ -376,26 +376,11 @@ Apply with `tools/fwpatch.py <img> <site> <variant> <out>` then `tools/fw-instal
 never sees it — 58.4 Mbps on VI against 3.53 on BE, same link, same second. No service, no
 firmware change, no interruption. This is the fix for a link that has to stay up.
 
-**The watchdog is a last resort.** `seekwave-latch-watchdog.sh` detects a legacy TX rate ≤6 Mbit/s
-at strong signal, confirms over two samples 10 s apart, then re-associates. It works —
-
-```
-latched          5.94 Mbps   iw=6.0     legacy_rate: 60
-after watchdog  99.8  Mbps   iw=143.3   mcs: 11, ieee80211ax
-```
-
-— but re-association **drops the link entirely**, measured over four runs:
-
-| lands on | outage |
-|---|---|
-| 5 GHz | 0.20 s, 0.33 s |
-| 2.4 GHz | 3.14 s, 3.49 s |
-
-A multi-second blackout is worse than degraded throughput for anything real-time, so only use it
-for traffic that tolerates a gap, and only where DSCP marking is not available. It has a 300 s
-cooldown so a recurring latch cannot turn into a reassociation loop.
-
-See `install/`.
+**Superseded by the driver fix.** Earlier mitigations lived here — a watchdog that detected a
+legacy TX rate at strong signal and re-associated (it worked, 5.94 -> 99.8 Mbps, but re-association
+blacks the link out for 0.2-3.5 s, which is worse than degraded throughput for anything real-time)
+and a firmware image patch for a mechanism later refuted. Both are removed; `patches/0002` recovers
+in 10-30 s with no outage and ships by default. See the import commit for the old files.
 
 ### The patch really is running, and not every byte is patchable
 
@@ -549,7 +534,6 @@ why RX holds MCS 10–11 while TX collapses.
 
 | Path | |
 | --- | --- |
-| `seekwave-fix-tx-rate-latch.py` | **the fix** — standalone, self-documenting, apply/revert/check |
 | `EXPERIMENTS.md` | what was established on hardware, in order |
 | `analysis/agent-1-rc-init-and-latch.md` | `rc_init` and the `+0xa4 == 0` latch, verbatim |
 | `analysis/agent-2-rate-ladder-module.md` | module map, struct layout, ladder mechanics, verbatim |
@@ -557,7 +541,10 @@ why RX holds MCS 10–11 while TX collapses.
 | `data/memory-map.md` | load addresses, struct layouts, function map |
 | `decomp/decomp-iram.c` | Ghidra decompilation, 1754 IRAM functions |
 | `tools/` | repro, triage, disassembly, image patch, live memory write |
-| `patches/` | driver-side patches — `0001` the shipped quirk, `0002` the condition-driven fix |
+| `patches/` | **the fix** — `0002` (shipped, upstreamed), `0003` logging, `0001` superseded |
+| `wifi-latch.md` | mechanism, evidence, and what a firmware fix would need |
+| `WORKLOG.md` | dated lab notebook, oldest work at the bottom |
+| `bench/wifi_latch_repro.sh` | the reproducer |
 
 Both `analysis/` reports predate the per-TID finding and are kept verbatim as sources. Where they
 conflict with this README, this README is the measurement.

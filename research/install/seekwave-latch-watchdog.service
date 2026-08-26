@@ -1,7 +1,0 @@
-[Unit]
-Description=Clear SWT6621S TX rate latch
-After=network.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/seekwave-latch-watchdog.sh wlan0

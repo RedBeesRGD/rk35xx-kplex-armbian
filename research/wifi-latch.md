@@ -234,8 +234,7 @@ Until then the driver-side fix is the shippable one.
 
 Correcting an earlier claim here that a firmware patch is "not durable": it is. Both images are
 loaded from disk into the adapter on every module load, so editing the file *is* the persistent
-mechanism, and prior work already built the tooling (`tools/fwpatch.py`,
-`seekwave-fw-patch.sh`, udev rule + service under `install/`).
+mechanism, and prior work already built the tooling (`tools/fwpatch.py`).
 
 It is also cheap. The image is raw Cortex-M code — no header, no trailer, no checksum field — and
 the driver CRCs whatever buffer it downloads, so patched bytes are covered automatically. Modules
