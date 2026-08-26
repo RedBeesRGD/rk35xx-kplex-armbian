@@ -34,4 +34,4 @@ bus-limited. That is what SDR104 would buy back.
 inducing the latch needs 2.4 GHz plus CPU load on a daily driver. This box logged one `stale TXBA`
 recovery before the deploy, so the detection does fire on real hardware.
 `0002-skw-renegotiate-silently-dropped-tx-ba.patch` detects a TX BA session the firmware dropped
-without `DEL_TX_BA` and renegotiates it. Full write-up: `todo/h96max-wifi-tx-latch.md`.
+without `DEL_TX_BA` and renegotiates it. Full write-up: `h96max/wifi-tx-latch.md`.
