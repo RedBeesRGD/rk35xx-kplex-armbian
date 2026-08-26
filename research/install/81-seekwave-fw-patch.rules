@@ -1,0 +1,3 @@
+# Patch SWT6621S firmware when the SDIO card is enumerated, before the function
+# driver probes and requests it.
+ACTION=="add", SUBSYSTEM=="mmc", ATTR{type}=="SDIO", RUN+="/usr/local/sbin/seekwave-fw-patch.sh"

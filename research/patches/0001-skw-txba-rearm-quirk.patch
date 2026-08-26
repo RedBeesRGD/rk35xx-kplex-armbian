@@ -1,0 +1,89 @@
+SUPERSEDED by 0002, which triggers on a confirmed condition instead of a timer.
+Kept only because 0002 requires an HE downlink and so cannot fire on HT-only or
+legacy links, where this would. Whether the fault occurs there is untested.
+
+From 9f2c1a4e7b3d05c8a1f6e2b9d4c70a5138ef62b1 Mon Sep 17 00:00:00 2001
+From: Artem Butusov <art.sormy@gmail.com>
+Date: Sat, 23 Aug 2026 16:20:11 -0400
+Subject: [PATCH] skw: add txba_rearm_sec quirk for silently dropped TX BA sessions
+
+A TID drops to 6.0 Mbit/s uplink under CPU load and stays there until
+re-association, because the firmware drops its TX BA session without sending
+DEL_TX_BA and peer->txba.bitmap keeps claiming one. See 0002 for the mechanism.
+
+Re-arm each TID's TX BA periodically so a dropped session is renegotiated.
+Default off: this is a workaround, it does not repair anything, and at the
+suggested 30 s it still allows 30 s of degraded uplink per event. Enable with
+swt6621s_wifi.txba_rearm_sec=30.
+
+Unlike 0002 this acts without evidence. It is safe only where BA sessions are
+short-lived (~5 s measured here); against an AP that keeps one up for minutes
+it would renegotiate a healthy link every interval.
+
+Signed-off-by: Artem Butusov <art.sormy@gmail.com>
+---
+ drivers/swt6621s_wifi/skw_core.c  | 20 +++++++++++++++++---
+ drivers/swt6621s_wifi/skw_iface.h |  1 +
+ 2 files changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/swt6621s_wifi/skw_core.c b/drivers/swt6621s_wifi/skw_core.c
+index e085fdc..dc4a200 100644
+--- a/drivers/swt6621s_wifi/skw_core.c
++++ b/drivers/swt6621s_wifi/skw_core.c
+@@ -70,6 +70,10 @@ char *swt6621s_firmware_dir = "";
+ module_param_named(firmware_dir, swt6621s_firmware_dir, charp, 0644);
+ MODULE_PARM_DESC(firmware_dir, "Firmware subdirectory under standard firmware path (e.g. \"seekwave\"). Empty means root directory.");
+ 
++static uint skw_txba_rearm_sec;
++module_param_named(txba_rearm_sec, skw_txba_rearm_sec, uint, 0644);
++MODULE_PARM_DESC(txba_rearm_sec, "Seconds between forced TX BA renegotiations per TID. 0 (default) disables. Workaround for firmware that drops a session without sending DEL_TX_BA.");
++
+ char swt6621s_board_id[64] = "";
+ 
+ int swt6621s_request_firmware(const struct firmware **fw, const char *name,
+@@ -212,8 +216,15 @@ static void skw_setup_txba(struct skw_core *skw, struct skw_iface *iface,
+ 		return;
+ 	}
+ 
+-	if (peer->txba.bitmap & BIT(tid))
+-		return;
++	if (peer->txba.bitmap & BIT(tid)) {
++		/* Firmware can stop honouring a session without sending DEL_TX_BA,
++		 * so the bitmap alone is not proof the session still exists.
++		 */
++		if (!skw_txba_rearm_sec || time_before(jiffies, peer->txba.rearm[tid]))
++			return;
++
++		SKW_CLEAR(peer->txba.bitmap, BIT(tid));
++	}
+ 
+ 	if (peer->txba.blacklist & BIT(tid)) {
+ 		if (time_after(jiffies, peer->txba.tx_timeout[tid])) {
+@@ -233,8 +244,11 @@ static void skw_setup_txba(struct skw_core *skw, struct skw_iface *iface,
+ 
+ 	ret = skw_queue_work(priv_to_wiphy(skw), iface, SKW_WORK_SETUP_TXBA,
+ 				&tx_ba, sizeof(tx_ba));
+-	if (!ret)
++	if (!ret) {
+ 		peer->txba.bitmap |= BIT(tid);
++		peer->txba.rearm[tid] = jiffies +
++					(unsigned long)skw_txba_rearm_sec * HZ;
++	}
+ }
+ 
+ struct skw_ctx_entry *skw_get_ctx_entry(struct skw_core *skw, const u8 *addr)
+diff --git a/drivers/swt6621s_wifi/skw_iface.h b/drivers/swt6621s_wifi/skw_iface.h
+index 16319c8..8eb36fd 100644
+--- a/drivers/swt6621s_wifi/skw_iface.h
++++ b/drivers/swt6621s_wifi/skw_iface.h
+@@ -242,6 +242,7 @@ struct skw_txba_ctrl {
+ 	u16 bitmap;
+ 	u16 blacklist;
+ 	unsigned long tx_timeout[SKW_NR_TID];
++	unsigned long rearm[SKW_NR_TID];
+ };
+ 
+ enum skw_msdu_filter {
+-- 
+2.39.5
+

@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for SWT6621S TX rate latch
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
