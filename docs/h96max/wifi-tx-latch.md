@@ -95,11 +95,13 @@ decrement walks it further from zero.
 ## Diagnostics and firmware access
 
 - `/proc/skwifid/chip1.sdio/wlan0` — per-peer TX mode, rate, `psr`, `tx_failed`, per-AC queue depth.
-  `iw dev wlan0 station dump` is empty on this driver, so this is the only per-peer view. ⚠️ **Its
-  TX rate goes stale.** Measured 2026-08-26: the node read `legacy_rate: 60, legacy` continuously
-  while the link pushed **78.3 Mbit/s** uplink — impossible at a 6 Mbit/s PHY rate. The field only
-  refreshes when the driver polls `GET_STA`, and nothing pushes it. Treat a `legacy` TX reading as a
-  prompt to measure throughput, never as proof of a latch on its own.
+  `iw dev wlan0 station dump` is empty on this driver, so this is the only per-peer view. ⚠️ **A
+  passive read of its TX rate is stale.** `peer->tx.rate` is written in exactly one place, the
+  get_station handler at `skw_cfg80211.c:2334`, so `cat`ting this node shows whatever was last left
+  there. Measured 2026-08-26: it read `legacy_rate: 60` continuously while the link moved 72 MB and
+  benchmarked 78.3 Mbit/s. Trigger a refresh with `iw dev wlan0 link`, which issues get_station, or
+  judge by throughput. This does not affect `0002`, which polls `GET_STA` itself and reads the
+  response — the reason v1, which gated passively on this field, never fired unattended.
 - Private WEXT ioctl `0x8BE1` on `wlan0`: `addrval=<addr>,<val>` maps to a firmware
   `*(u32*)addr = val` — arbitrary write, enough to patch code in a running chip. `rcminrate` forces
   a ladder rebuild, which does **not** clear the latch.
