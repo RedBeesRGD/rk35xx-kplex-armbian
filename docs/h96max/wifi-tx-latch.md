@@ -22,11 +22,11 @@ latch lands at t+170–180 s, and nothing follows, while TIDs 1 and 4 keep cycli
 
 ## The fix
 
-`firmware/h96max/seekwave-swt6621s/0002-skw-renegotiate-silently-dropped-tx-ba.patch`, applied to
-the pinned driver by `fetch-seekwave-src.sh`. Suspicion is a session claimed longer than
-`txba_stale_sec` (default **10 s**, against ~5 s measured); confirmation is a `GET_STA` showing
-`tx.rate` legacy while `rx.rate` is not, which cannot happen on a working aggregated link. A peer
-with no HE reads legacy both ways, so it never fires there. On by default.
+`patches/seekwave-swt6621s/0002-skw-renegotiate-silently-dropped-tx-ba.patch`, applied to the pinned
+driver by `fetch-seekwave-src.sh`. Suspicion is a session claimed longer than `txba_stale_sec`
+(default **10 s**, against ~5 s measured); confirmation is a `GET_STA` showing `tx.rate` legacy
+while `rx.rate` is not, which cannot happen on a working aggregated link. A peer with no HE reads
+legacy both ways, so it never fires there. On by default.
 
 Validated by toggling `txba_stale_sec` on a single latched association — no reload, no
 re-association, same load:
@@ -95,7 +95,11 @@ decrement walks it further from zero.
 ## Diagnostics and firmware access
 
 - `/proc/skwifid/chip1.sdio/wlan0` — per-peer TX mode, rate, `psr`, `tx_failed`, per-AC queue depth.
-  `iw dev wlan0 station dump` is empty on this driver; this node is better.
+  `iw dev wlan0 station dump` is empty on this driver, so this is the only per-peer view. ⚠️ **Its
+  TX rate goes stale.** Measured 2026-08-26: the node read `legacy_rate: 60, legacy` continuously
+  while the link pushed **78.3 Mbit/s** uplink — impossible at a 6 Mbit/s PHY rate. The field only
+  refreshes when the driver polls `GET_STA`, and nothing pushes it. Treat a `legacy` TX reading as a
+  prompt to measure throughput, never as proof of a latch on its own.
 - Private WEXT ioctl `0x8BE1` on `wlan0`: `addrval=<addr>,<val>` maps to a firmware
   `*(u32*)addr = val` — arbitrary write, enough to patch code in a running chip. `rcminrate` forces
   a ladder rebuild, which does **not** clear the latch.

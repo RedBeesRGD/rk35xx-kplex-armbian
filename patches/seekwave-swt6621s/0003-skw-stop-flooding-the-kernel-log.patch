@@ -1,0 +1,282 @@
+From 7c3e5a91d84b02f6ac1e73d5b904812fe6a5d370 Mon Sep 17 00:00:00 2001
+From: Artem Butusov <art.sormy@gmail.com>
+Date: Wed, 26 Aug 2026 01:05:00 -0400
+Subject: [PATCH] skw: stop flooding the kernel log at error level
+
+Two mechanisms put ordinary driver chatter into the error log.
+
+skw_log() and skw_sdio_log() take a level, test it against the log mask,
+then call pr_err() whatever the level was. Every severity wrapper routes
+through them, so skw_info() and skw_dbg() print at KERN_ERR. On an idle
+station 111 of 155 [SKWSDIO] lines in 42 minutes were "cp fifo status"
+from skw_sdio_rx_thread(), an skw_sdio_info() call, and dmesg -l err,warn
+listed all of them.
+
+Add a level-aware form and route each wrapper to its matching printk.
+The mask test is unchanged, so /proc/skwifid/log_level still selects
+exactly the same messages; only their severity changes. SKW_DETAIL maps
+to pr_debug alongside SKW_DEBUG, having no printk level of its own.
+
+That leaves skw_log() and skw_sdio_log() serving only the category masks
+called directly from the source - STATE, TIMER, SCAN, CMD, EVENT, DFS,
+WORK and the port logs. Those are diagnostics, not failures, so they go
+to pr_info. An association state machine printing NONE -> AUTHING ->
+AUTHED at KERN_ERR is the visible case.
+
+Two calls are then mislabelled at the source. skw_sdio_rx_thread() logs
+"cp fifo status" at info on the path where the FIFO has not moved and
+there is nothing to do - the same text and values the dbg call four lines
+above already prints unconditionally. It ran 216 times an hour on an idle
+station. And eight calls print "the ---debug---line:%d" at info. Both go
+to dbg.
+
+skw_hex_dump() takes a "force" flag that skips the SKW_DUMP check:
+
+	if ((skw_log_level() & SKW_DUMP) || force)
+
+Five per-packet sites passed true, so they dumped regardless of the
+setting. 1659 of 1678 driver lines over two days were "short skb" from
+skw_ndo_start_xmit() while log_level reported "dump log: disable". Pass
+false so the existing control applies; the dumps remain available by
+enabling dump logging. Sites left alone are bounded: one at wiphy init
+and three reached only from private ioctls.
+
+Signed-off-by: Artem Butusov <art.sormy@gmail.com>
+---
+--- a/drivers/seekwaveplatform_lite/sdio/skw_sdio_log.h
++++ b/drivers/seekwaveplatform_lite/sdio/skw_sdio_log.h
+@@ -33,29 +33,35 @@
+ #define skw_sdio_log(level, fmt, ...) \
+ 	do { \
+ 		if (skw_sdio_log_level() & level) \
+-			pr_err(fmt,  ##__VA_ARGS__); \
++			pr_info(fmt,  ##__VA_ARGS__); \
+ 	} while (0)
+ 
+ #define skw_sdio_port_log(port_num, fmt, ...) \
+ 	do { \
+ 		if (skw_sdio_log_level() &(SKW_SDIO_PORT0<<port_num)) \
+-			pr_err(fmt,  ##__VA_ARGS__); \
++			pr_info(fmt,  ##__VA_ARGS__); \
+ 	} while (0)
+ 
+ #define skw_port_log(port_num,fmt, ...) \
+ 	skw_sdio_log((SKW_SDIO_PORT0<<port_num), "[PORT_LOG] %s: "fmt, __func__, ##__VA_ARGS__)
+ 
++#define skw_sdio_log_at(pr_fn, level, fmt, ...) \
++	do { \
++		if (skw_sdio_log_level() & level) \
++			pr_fn(fmt,  ##__VA_ARGS__); \
++	} while (0)
++
+ #define skw_sdio_err(fmt, ...) \
+-	skw_sdio_log(SKW_SDIO_ERROR, "[SKWSDIO ERROR] %s: "fmt, __func__, ##__VA_ARGS__)
++	skw_sdio_log_at(pr_err, SKW_SDIO_ERROR, "[SKWSDIO ERROR] %s: "fmt, __func__, ##__VA_ARGS__)
+ 
+ #define skw_sdio_warn(fmt, ...) \
+-	skw_sdio_log(SKW_SDIO_WARNING, "[SKWSDIO WARN] %s: "fmt, __func__, ##__VA_ARGS__)
++	skw_sdio_log_at(pr_warn, SKW_SDIO_WARNING, "[SKWSDIO WARN] %s: "fmt, __func__, ##__VA_ARGS__)
+ 
+ #define skw_sdio_info(fmt, ...) \
+-	skw_sdio_log(SKW_SDIO_INFO, "[SKWSDIO INFO] %s: "fmt, __func__, ##__VA_ARGS__)
++	skw_sdio_log_at(pr_info, SKW_SDIO_INFO, "[SKWSDIO INFO] %s: "fmt, __func__, ##__VA_ARGS__)
+ 
+ #define skw_sdio_dbg(fmt, ...) \
+-	skw_sdio_log(SKW_SDIO_DEBUG, "[SKWSDIO DBG] %s: "fmt, __func__, ##__VA_ARGS__)
++	skw_sdio_log_at(pr_debug, SKW_SDIO_DEBUG, "[SKWSDIO DBG] %s: "fmt, __func__, ##__VA_ARGS__)
+ 
+ #define skw_sdio_hex_dump(prefix, buf, len) \
+ 	do { \
+--- a/drivers/seekwaveplatform_lite/sdio/skw_sdio_rx.c
++++ b/drivers/seekwaveplatform_lite/sdio/skw_sdio_rx.c
+@@ -1529,7 +1529,7 @@
+ 					__LINE__,fifo_ind, skw_sdio->cp_fifo_status, ret);
+ 
+ 			if(fifo_ind == skw_sdio->cp_fifo_status && !is_timeout_kick) {
+-				skw_sdio_info("line:%d cp fifo status(%d,%d) ret=%d\n",
++				skw_sdio_dbg("line:%d cp fifo status(%d,%d) ret=%d\n",
+ 						__LINE__,fifo_ind, skw_sdio->cp_fifo_status, ret);
+ 				skw_sdio_unlock_rx_ws(skw_sdio);
+ 				continue;
+@@ -2441,13 +2441,13 @@
+ 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+ #if defined(SKW_BOOT_MEMPOWERON)
+ 	ktime_t cur, start_poll;
+-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
++	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
+ 
+ 	cur = ktime_get();
+ 	if(skw_sdio->boot_data==NULL ||(skw_sdio->service_state_map & (1<<BT_SERVICE)))
+ 		return ret;
+ 
+-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
++	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
+ 	mutex_lock(&skw_sdio->service_mutex);
+ 	if(skw_sdio->boot_data->iram_img_data && skw_sdio->service_index_map){
+ 		skw_sdio_info("just download the BT img!!\n");
+@@ -2479,7 +2479,7 @@
+ {
+ 	int ret =0;
+ 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
++	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
+ 
+ 	if(skw_sdio->boot_data ==NULL)
+ 		return ret;
+@@ -2501,12 +2501,12 @@
+ {
+ 	int ret =0;
+ 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
++	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
+ 
+ 	if (skw_sdio->boot_data==NULL ||(skw_sdio->service_state_map & (1<<WIFI_SERVICE)))
+ 		return 0;
+ #if defined(SKW_BOOT_MEMPOWERON)
+-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
++	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
+ 	mutex_lock(&skw_sdio->service_mutex);
+ #if SKW_WIFIONLY_DEBUG//for the debug wifi only  setvalue 0
+ 	if(skw_sdio->boot_data->iram_img_data && glb_wifiready_done){
+@@ -2514,7 +2514,7 @@
+ 	if(skw_sdio->boot_data->iram_img_data && skw_sdio->service_index_map){
+ #endif
+ 		//skw_sdio->service_index_map &= SKW_WIFI;
+-		skw_sdio_info("the ---debug---line:%d \n",__LINE__);
++		skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
+ #if 0
+ 		if(!skw_sdio->service_index_map){
+ 			skw_sdio_info("the first downkload firmware!!\n");
+@@ -2531,7 +2531,7 @@
+ 		skw_sdio_poweron_mem(SKW_WIFI);
+ 		skw_sdio->boot_data->skw_dloader_module(SKW_WIFI);
+ 	}
+-	skw_sdio_info("the ---debug---line:%d \n",__LINE__);
++	skw_sdio_dbg("the ---debug---line:%d \n",__LINE__);
+ 	if (skw_sdio->boot_data->wifi_start)
+ 		ret=skw_sdio->boot_data->wifi_start();
+ 	skw_sdio->service_index_map = SKW_WIFI;
+@@ -2555,7 +2555,7 @@
+ {
+ 	int ret =0;
+ 	struct skw_sdio_data_t *skw_sdio = skw_sdio_get_data();
+-	skw_sdio_info ("the ---debug---line:%d \n",__LINE__);
++	skw_sdio_dbg ("the ---debug---line:%d \n",__LINE__);
+ 	//debug code end
+ 	if(skw_sdio->boot_data ==NULL){
+ 		skw_sdio_info("no wifi service start before!!");
+--- a/drivers/swt6621s_wifi/skw_core.c
++++ b/drivers/swt6621s_wifi/skw_core.c
+@@ -367,7 +367,7 @@
+ 	/* Mini frame size that HW support */
+ 	if (unlikely(skb->len <= 16)) {
+ 		skw_dev_dbg(dev, "current: %s\n", current->comm);
+-		skw_hex_dump("short skb", skb->data, skb->len, true);
++		skw_hex_dump("short skb", skb->data, skb->len, false);
+ 
+ 		if (skb->len != ETH_HLEN || eth->h_proto != htons(ETH_P_IP))
+ 			SKW_BUG_ON(1);
+--- a/drivers/swt6621s_wifi/skw_edma.c
++++ b/drivers/swt6621s_wifi/skw_edma.c
+@@ -767,7 +767,7 @@
+ 
+ 			skw_warn("total len: %d\n", total_len);
+ 			skw_warn("rxc node address:%llx skb->data:%llx\n", virt_to_phys(data), virt_to_phys(skb->data));
+-			skw_hex_dump("invalid rx skb:", skb->data, skb->len, true);
++			skw_hex_dump("invalid rx skb:", skb->data, skb->len, false);
+ 
+ 			//skw_compat_page_frag_free((void *)p_data);
+ 			//kfree_skb(skb);
+--- a/drivers/swt6621s_wifi/skw_log.h
++++ b/drivers/swt6621s_wifi/skw_log.h
+@@ -65,42 +65,48 @@
+ #define skw_log(level, fmt, ...) \
+ 	do { \
+ 		if (skw_log_level() & level) \
+-			pr_err(fmt,  ##__VA_ARGS__); \
++			pr_info(fmt,  ##__VA_ARGS__); \
+ 	} while (0)
+ 
++#define skw_log_at(pr_fn, level, fmt, ...) \
++	do { \
++		if (skw_log_level() & level) \
++			pr_fn(fmt,  ##__VA_ARGS__); \
++	} while (0)
++
+ #define skw_err(fmt, ...) \
+-	skw_log(SKW_ERROR, "[%s] %s: "fmt, SKW_TAG_ERROR, __func__, ##__VA_ARGS__)
++	skw_log_at(pr_err, SKW_ERROR, "[%s] %s: "fmt, SKW_TAG_ERROR, __func__, ##__VA_ARGS__)
+ 
+ #define skw_warn(fmt, ...) \
+-	skw_log(SKW_WARN, "[%s] %s: "fmt, SKW_TAG_WARN, __func__, ##__VA_ARGS__)
++	skw_log_at(pr_warn, SKW_WARN, "[%s] %s: "fmt, SKW_TAG_WARN, __func__, ##__VA_ARGS__)
+ 
+ #define skw_info(fmt, ...) \
+-	skw_log(SKW_INFO, "[%s] %s: "fmt, SKW_TAG_INFO, __func__, ##__VA_ARGS__)
++	skw_log_at(pr_info, SKW_INFO, "[%s] %s: "fmt, SKW_TAG_INFO, __func__, ##__VA_ARGS__)
+ 
+ #define skw_dbg(fmt, ...) \
+-	skw_log(SKW_DEBUG, "[%s] %s: "fmt, SKW_TAG_DEBUG, __func__, ##__VA_ARGS__)
++	skw_log_at(pr_debug, SKW_DEBUG, "[%s] %s: "fmt, SKW_TAG_DEBUG, __func__, ##__VA_ARGS__)
+ 
+ #define skw_detail(fmt, ...) \
+-	skw_log(SKW_DETAIL, "[%s] %s: "fmt, SKW_TAG_DETAIL, __func__, ##__VA_ARGS__)
++	skw_log_at(pr_debug, SKW_DETAIL, "[%s] %s: "fmt, SKW_TAG_DETAIL, __func__, ##__VA_ARGS__)
+ 
+ #define skw_dev_err(dev, fmt, ...) \
+-	skw_log(SKW_ERROR, "[%s] %s@%s: "fmt, SKW_TAG_ERROR, netdev_name(dev), \
++	skw_log_at(pr_err, SKW_ERROR, "[%s] %s@%s: "fmt, SKW_TAG_ERROR, netdev_name(dev), \
+ 		__func__, ##__VA_ARGS__)
+ 
+ #define skw_dev_warn(dev, fmt, ...) \
+-	skw_log(SKW_WARN, "[%s] %s.%s: "fmt, SKW_TAG_WARN, netdev_name(dev), \
++	skw_log_at(pr_warn, SKW_WARN, "[%s] %s.%s: "fmt, SKW_TAG_WARN, netdev_name(dev), \
+ 		__func__, ##__VA_ARGS__)
+ 
+ #define skw_dev_info(dev, fmt, ...) \
+-	skw_log(SKW_INFO, "[%s] %s.%s: "fmt, SKW_TAG_INFO, netdev_name(dev), \
++	skw_log_at(pr_info, SKW_INFO, "[%s] %s.%s: "fmt, SKW_TAG_INFO, netdev_name(dev), \
+ 		__func__, ##__VA_ARGS__)
+ 
+ #define skw_dev_dbg(dev, fmt, ...) \
+-	skw_log(SKW_DEBUG, "[%s] %s.%s: "fmt, SKW_TAG_DEBUG, netdev_name(dev), \
++	skw_log_at(pr_debug, SKW_DEBUG, "[%s] %s.%s: "fmt, SKW_TAG_DEBUG, netdev_name(dev), \
+ 		__func__, ##__VA_ARGS__)
+ 
+ #define skw_dev_detail(dev, fmt, ...) \
+-	skw_log(SKW_DETAIL, "[%s] %s.%s: "fmt, SKW_TAG_DETAIL, netdev_name(dev), \
++	skw_log_at(pr_debug, SKW_DETAIL, "[%s] %s.%s: "fmt, SKW_TAG_DETAIL, netdev_name(dev), \
+ 		__func__, ##__VA_ARGS__)
+ 
+ #define skw_hex_dump(prefix, buf, len, force)                                    \
+--- a/drivers/swt6621s_wifi/skw_rx.c
++++ b/drivers/swt6621s_wifi/skw_rx.c
+@@ -1150,7 +1150,7 @@
+ 		if (desc->amsdu_first_idx &&
+ 		    ether_addr_equal(skb->data, snap_hdr)) {
+ 			cb->amsdu_flags |= SKW_AMSDU_FLAG_TAINT;
+-			skw_hex_dump("attack", skb->data, 14, true);
++			skw_hex_dump("attack", skb->data, 14, false);
+ 		}
+ 
+ 		if (desc->amsdu_last_idx) {
+@@ -1295,7 +1295,7 @@
+ 				skw->hw.rx_desc.msdu_offset -
+ 				skw->hw.rx_desc.hdr_offset;
+ 		if (printk_timed_ratelimit(&j, 5000))
+-			skw_hex_dump("dump", pskb->data - msdu_offset, pskb->len+msdu_offset, true);
++			skw_hex_dump("dump", pskb->data - msdu_offset, pskb->len+msdu_offset, false);
+ 		// skw_hw_assert(skw, false);
+ 		return;
+ 	}
+--- a/drivers/swt6621s_wifi/skw_tx.c
++++ b/drivers/swt6621s_wifi/skw_tx.c
+@@ -1130,7 +1130,7 @@
+ 
+ 		skw_dbg("    Desc[%03u]: addr=0x%016llx, len=%u, flags=0x%04x, next=%u\n",
+ 				i, (unsigned long long)desc->addr, desc->len, desc->flags, desc->next);
+-		skw_hex_dump("desc addr", phys_to_virt(desc->addr), desc->len, true);
++		skw_hex_dump("desc addr", phys_to_virt(desc->addr), desc->len, false);
+ 	}
+ 
+ 	skw_dbg("  Available Ring (avail->idx=%u):\n", avail_idx);

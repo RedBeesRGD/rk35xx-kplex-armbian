@@ -9,13 +9,13 @@ DIR="${1:?usage: fetch-seekwave-src.sh <src-dir>}"
 # pinned commit of https://github.com/retro98boy/seekwave-swt6621s (kickpi-k3b-sdio-uart branch)
 SHA=b1b15016119cb21965fc64dd374e42f46f011bb4
 
-HERE="$(cd "$(dirname "$0")" && pwd)"
+PATCHES="$(cd "$(dirname "$0")/../../patches/seekwave-swt6621s" && pwd)"
 
 mkdir -p "$DIR"
 curl -fsSL "https://codeload.github.com/retro98boy/seekwave-swt6621s/tar.gz/$SHA" \
   | tar -xz -C "$DIR" --strip-components=1
 
-for p in "$HERE"/seekwave-swt6621s/*.patch; do
+for p in "$PATCHES"/*.patch; do
   patch -p1 -d "$DIR" < "$p"
 done
 # the repo's own dkms.conf drives the build (package seekwave-swt6621s/1.0.0: skw_sdio_lite,

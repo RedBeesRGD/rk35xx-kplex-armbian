@@ -1,0 +1,77 @@
+# NOT NEEDED ON EITHER BOARD HERE — kept in case it helps someone else.
+#
+# The bug needs two enabled dw_mci controllers both taking the v2 tuning path, contending over a
+# function-scope static. Neither R69 nor H96 Max does, and neither can be made to: on both, the SD
+# controller has sd-uhs-* stripped so it never calls execute_tuning, and the one SDIO controller
+# that does tune declares use-v2-tuning on the R69 only. Never observed, so never submitted.
+# Reasoning in README.md.
+#
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Artem Butusov <art.sormy@gmail.com>
+Date: Fri, 15 Aug 2026 00:00:00 +0000
+Subject: [PATCH] mmc: dw_mmc-rockchip: make the tuning inherit flag per host
+
+dw_mci_v2_execute_tuning() decides whether to adopt the sample phase the
+firmware left configured, which is known to work, or to search the four
+fixed phases itself. That decision is guarded by a function-scope static:
+
+	static bool inherit = true;
+
+	if (inherit) {
+		inherit = false;
+		... adopt the firmware phase ...
+	}
+
+The flag is per host in intent - "the first time this controller tunes,
+trust what firmware set up" - but a static is shared by every dw_mmc
+instance in the system. A SoC with two v2-tuning controllers therefore
+gets the intended behaviour on whichever tunes first, while the second one
+finds the flag already cleared and goes straight to the search loop,
+starting from last_degree + 90 with last_degree still 0. It never tries
+the phase firmware chose for it.
+
+Which controller loses depends on probe order, so the effect moves between
+boots. On an RK3518 TV box the SD slot and the SDIO Wi-Fi are two of the
+three dw_mmc instances, both set rockchip,use-v2-tuning, and their probe
+order is not stable.
+
+Move the flag into dw_mci_rockchip_priv_data, which is allocated per host,
+and set it when that struct is created. Each controller now inherits its
+own firmware phase exactly once, as the comment above the search loop
+already describes.
+
+Signed-off-by: Artem Butusov <art.sormy@gmail.com>
+---
+diff --git a/drivers/mmc/host/dw_mmc-rockchip.c b/drivers/mmc/host/dw_mmc-rockchip.c
+--- a/drivers/mmc/host/dw_mmc-rockchip.c
++++ b/drivers/mmc/host/dw_mmc-rockchip.c
+@@ -37,6 +37,7 @@
+ 	int			default_sample_phase;
+ 	int			num_phases;
+ 	bool			use_v2_tuning;
++	bool			inherit;
+ 	int			usrid;
+ 	int			last_degree;
+ 	u32			f_min;
+@@ -280,10 +281,9 @@
+ 	struct mmc_host *mmc = slot->mmc;
+ 	u32 degrees[4] = {0, 90, 180, 270}, degree;
+ 	int i;
+-	static bool inherit = true;
+ 
+-	if (inherit) {
+-		inherit = false;
++	if (priv->inherit) {
++		priv->inherit = false;
+ 		if (priv->usrid == USRID_INTER_PHASE)
+ 			i = rockchip_mmc_get_phase(host, true) / 90;
+ 		else
+@@ -494,6 +494,8 @@
+ 	if (!priv)
+ 		return -ENOMEM;
+ 
++	priv->inherit = true;
++
+ 	/*
+ 	 * RK356X SoCs only support 375KHz for ID mode, so any clk request
+ 	 * that less than 1.6MHz(2 * 400KHz * RK3288_CLKGEN_DIV) should be

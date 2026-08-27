@@ -38,24 +38,26 @@ hook, or a unit for hardware only it has (the R69's `rk35xx-bt`).
 **This table is the only index.** Docs are independent — each stands alone and none links to
 another, so nothing rots when one is rewritten.
 
-| Doc                            | Holds                                                                 |
-| ------------------------------ | --------------------------------------------------------------------- |
-| `docs/board-bringup.md`        | serial, evidence, device tree, board data, offline verify             |
-| `docs/board-validation.md`     | the criteria of done, and the caveats behind them                     |
-| `docs/mpp.md`                  | reaching the video engines; the codec test commands                   |
-| `docs/armbian-install.md`      | the factory reserved window: what survives a migration, what does not |
-| `docs/uboot.md`                | the bootloader pair: what we build, what stays factory, why           |
-| `docs/apt-upgrade.md`          | the hooks and the hold that keep the overlay alive across upgrades    |
-| `docs/watchdog.md`             | why it cannot be stopped, and why a soft reboot can strand the box    |
-| `docs/todo/`                   | open questions — `rk35xx-` is family-wide, `<board>-` is one box      |
-| `docs/<board>/board.md`        | that board's identity, measured numbers, known gaps                   |
-| `docs/<board>/dtb.md`          | that board's device-tree changes, tried and reverted ones too         |
-| `docs/<board>/worklog.md`      | dated history, wrong turns included                                   |
-| `docs/h96max/wifi-tx-latch.md` | the 6 Mbit/s TX latch: cause, the shipped fix, how to retest          |
-| `docs/r69/upstream.md`         | what the two closed upstream submissions established, and why         |
-| `upstream/README.md`           | turning the grafts into something upstreamable                        |
-| `patches/dtc/README.md`        | the patched `dtc` that round-trips a vendor blob with `&label`s       |
-| `patches/e2tools/README.md`    | the patched `e2tools`; why the stock one corrupts an image on delete  |
+| Doc                                   | Holds                                                                 |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| `docs/board-bringup.md`               | serial, evidence, device tree, board data, offline verify             |
+| `docs/board-validation.md`            | the criteria of done, and the caveats behind them                     |
+| `docs/mpp.md`                         | reaching the video engines; the codec test commands                   |
+| `docs/armbian-install.md`             | the factory reserved window: what survives a migration, what does not |
+| `docs/uboot.md`                       | the bootloader pair: what we build, what stays factory, why           |
+| `docs/apt-upgrade.md`                 | the hooks and the hold that keep the overlay alive across upgrades    |
+| `docs/watchdog.md`                    | why it cannot be stopped, and why a soft reboot can strand the box    |
+| `docs/todo/`                          | open questions — `rk35xx-` is family-wide, `<board>-` is one box      |
+| `docs/<board>/board.md`               | that board's identity, measured numbers, known gaps                   |
+| `docs/<board>/dtb.md`                 | that board's device-tree changes, tried and reverted ones too         |
+| `docs/<board>/worklog.md`             | dated history, wrong turns included                                   |
+| `docs/h96max/wifi-tx-latch.md`        | the 6 Mbit/s TX latch: cause, the shipped fix, how to retest          |
+| `docs/r69/upstream.md`                | what the two closed upstream submissions established, and why         |
+| `upstream/README.md`                  | turning the grafts into something upstreamable                        |
+| `patches/dtc/README.md`               | the patched `dtc` that round-trips a vendor blob with `&label`s       |
+| `patches/e2tools/README.md`           | the patched `e2tools`; why the stock one corrupts an image on delete  |
+| `patches/linux-rockchip/README.md`    | the kernel fixes and their PRs; why an overlay box cannot apply them  |
+| `patches/seekwave-swt6621s/README.md` | the H96 Max Wi-Fi driver patches and their PRs                        |
 
 # Standing rules
 

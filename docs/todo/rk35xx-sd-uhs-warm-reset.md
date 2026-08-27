@@ -40,13 +40,23 @@ bus never came up, ACMD41/CMD5 means it did and the card refused. Nothing captur
 
 **The `static bool inherit` bug in `dw_mci_v2_execute_tuning()`** — a per-host decision kept in a
 function-scope static, so on a SoC with two v2-tuning controllers only the first to probe adopts its
-firmware sample phase. Real; a fix was written against the Armbian build tree in the closed
-`armbian/build#10440`, is **not carried here**, and was never tested on hardware.
+firmware sample phase. Real, and a fix exists as
+`patch/kernel/rk35xx-vendor-6.1/mmc-dw-mmc-rockchip-per-host-inherit.patch` in the Armbian build
+checkout — **untracked there, on branch `r69-xr821`**, so a `git clean` loses it. Never tested on
+hardware, and it cannot reach an overlay box in any case: Armbian's `patch/` and `userpatches/`
+trees only apply when you build the kernel, and we take ours from `apt`.
 
 It cannot explain the H96 Max: only `mmc@ffc30000` sets `rockchip,use-v2-tuning` there, and the SDIO
-`mmc@ffc20000` `-110`s too without it. The **R69** is where the bug is live, with `use-v2-tuning` on
-both enabled controllers — the board to test the patch on. Tuning also runs after a successful
-identification at 400 kHz, which is where the `-110` lands.
+`mmc@ffc20000` `-110`s too without it.
+
+**Nor can it fire on the R69**, though that board does set `use-v2-tuning` on two enabled
+controllers: `mmc@ffc30000` has no UHS or HS200 modes left after the strip, and plain high speed
+never calls `execute_tuning`. Restoring them there is not an option either — that SD has no
+`vqmmc-supply`, so no 1.8 V switch to run UHS with.
+
+Restoring UHS **here** is on the table, since this board has a real `vccio_sd` switch, but it still
+would not reach that bug: this SDIO controller does not declare `use-v2-tuning`, so it stays on the
+non-v2 path whatever the SD does. The two subjects are unrelated.
 
 ## Next experiments, cheapest first
 

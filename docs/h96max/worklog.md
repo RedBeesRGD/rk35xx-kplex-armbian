@@ -1963,3 +1963,31 @@ s is the SD figure, not a regression — `board.md` now carries both. `rk35xx-ma
 2.4 s of that, which is the interface poll.
 
 The watchdog also went 44 s → 89 s here, which had been pending since the R69 got it on 2026-08-21.
+
+### 2026-08-26 — the full noise patch verified, and the TX-rate diagnostic caught lying
+
+`0003` deployed and rebooted with all three parts live: severity routing, the category masks
+(`skw_log()`/`skw_sdio_log()` → `pr_info`), and the two source-level demotions.
+
+|                                   | before  | after, 15 min uptime            |
+| --------------------------------- | ------- | ------------------------------- |
+| `cp fifo status`                  | ~198/h  | **0** (old rate predicts 50)    |
+| `the ---debug---`                 | present | **0**                           |
+| skw lines at err/warn             | 18      | 4                               |
+| `[SKWIFI6621S STATE]` at err/warn | 15      | 0 — moved to info, not silenced |
+| total err/warn                    | 509     | 494                             |
+
+The total barely moves because the `devm_gpiod_put` WARN is ~416 lines of it and is untouched by
+this. The skw contribution is what went to near zero.
+
+**`0002` fired on a real latch, unprompted.** Four TIDs renegotiated within a minute
+(`stale TXBA, tid: 1/0/4/6`). The four `setup TXBA failed, ret: -1` lines are earlier, during
+association churn at 22:44–22:47, not failures of the renegotiation.
+
+**Nearly filed a false alarm off a bad diagnostic.** `/proc/skwifid/chip1.sdio/wlan0` reported
+`TX: legacy_rate: 60, nss:1, legacy` for ten consecutive samples over 3.5 minutes, which reads
+exactly like the latch. Measured throughput instead: **78.3 Mbit/s uplink** (26 MB in 2.7 s, python
+socket to the host — `nc` is not on the box). 78 Mbit/s cannot happen on a 6 Mbit/s PHY rate, so the
+field is stale, not live; `data: 0` beside it says the same. It refreshes only when the driver polls
+`GET_STA`. `wifi-tx-latch.md` had called that node "better" than `iw` — corrected to say a `legacy`
+reading is a prompt to measure, never proof.

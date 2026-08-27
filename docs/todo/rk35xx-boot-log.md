@@ -1,8 +1,24 @@
 # Boot log cleanup
 
-`dmesg` on the R69 (2026-08-15, kernel 6.1.115) is **914 lines**, of which 121 are err/warn. The bar
-in `board-validation.md` is _no repeated chatter at any level_, so the 914 is the number that
-matters. Almost none of it is a real fault; most is drivers announcing normal progress.
+`dmesg` on the R69 is **1317 lines, 524 err/warn** (2026-08-26, 41 min uptime, kernel 6.1.115 pkg
+26.8.3); the H96 Max is 1508/676. An earlier 914/121 reading predates the two entries below. The bar
+in `board-validation.md` is _no repeated chatter at any level_, so the total is what matters. Almost
+none of it is a real fault; most is drivers announcing normal progress.
+
+Two entries dominate the err/warn count:
+
+- **A `WARNING` plus AArch64 code dump at probe, ~50 lines, on both boards.**
+  `drivers/gpio/gpiolib-devres.c:327 devm_gpiod_put+0x34/0x44`, reached from `stmmac_mdio_reset` →
+  `__mdiobus_register`. These boards have an integrated PHY and no reset line — dmesg says "No PHY
+  reset control found" — so the driver puts a GPIO it never got. Benign: ethernet still measures 94
+  Mbit/s. An upstream `stmmac` bug, not board data, and **not** the `snps,mtl-rx-config` defect from
+  the submission tree — the shipped tree points those at `&gmac0_mtl_rx_setup` correctly.
+- **`done=1 retry_required=0 sw_retry_required=0 acknowledged=1`, R69 only, ~12/h.** A bare
+  `printk()` — no level, no prefix — at `aic8800_sdio/aic8800_fdrv/rwnx_tx.c:1835`, so it defaults
+  to `KERN_WARNING`. It fires in the TX-confirm path for every management frame, which is what makes
+  it periodic. `pr_debug()` with a prefix is the fix, but the driver ships **inside
+  `linux-image-vendor-rk35xx`** (`dpkg -S` confirms), not as DKMS, so an overlay box has no source
+  to patch — it needs a kernel change, not a payload one.
 
 **Relevelling is not fixing.** A line that tells the reader nothing is noise at any level, and
 `dev_dbg` just hides it while leaving the log as long for anyone who raises the level. Delete it, or
