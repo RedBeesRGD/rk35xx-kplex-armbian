@@ -1,24 +1,25 @@
 # Device trees, for upstreaming
 
-A board tree as a diff against that box's own factory tree. `<board>/armbian.patch` and
+A board tree as a diff against that box's own factory tree. `firmware/<stock>/board.patch` and
 `<board>/header.dts` are the only files edited by hand; `./build.sh` regenerates the rest, including
 the submission itself, and verifies it.
 
 ## Process
 
 1. Carve the DTB from the eMMC dump, never off a running box — u-boot rewrites the tree it hands to
-   Linux. Find it by its `d00dfeed` magic in the `boot` partition. → `stock/<board>/board.dtb`
+   Linux. Find it by its `d00dfeed` magic in the `boot` partition. → `stock/<stock>/board.dtb`
 2. Decompile: `tools/dtc/dtc -I dtb -O dts -P -n` (`-P` phandles → `&label`, `-n` drops
    `__symbols__`).
 3. Edit into the Armbian tree; comment each change with the consumer that needs it. Then:
    ```sh
-   cd <board> && diff -u --label board.dts --label armbian.dts board.dts armbian.dts > armbian.patch
+   cd <board> && diff -u --label board.dts --label armbian.dts board.dts armbian.dts \
+     > ../../firmware/<stock>/board.patch
    ```
-4. Build its DTB — this is what boots — and compare it against `firmware/<board>/board.dtb`, the
-   pair images ship and `rk35xx-update` installs. `firmware/` is the only tracked copy of this tree,
-   everything under `upstream/` being generated. `build.sh` reports a difference and leaves
-   `firmware/` alone; `SYNC=1` overwrites it. A board may diverge on purpose — the R69 comments out
-   its uart2 `bluetooth` child, so syncing it would take that box's Bluetooth with it.
+4. Build its DTB — this is what boots — and compare it against `firmware/<stock>/board.dtb`, the
+   pair images ship and `rk35xx-update` installs. `firmware/` holds the only tracked copy of the
+   tree itself. `build.sh` reports a difference and leaves `firmware/` alone; `SYNC=1` overwrites
+   it. A board may diverge on purpose — a downstream workaround for a kernel fix that has not merged
+   — so never sync without reading the report. None does today.
 5. `scripts/gen-overrides.py` re-expresses it as `/delete-node/` + `&label { }` over the vendor's
    reference dtsi, under `<board>/header.dts`. That output, `armbian-native.dts`, is the file that
    gets submitted.
@@ -37,22 +38,23 @@ Everything but step 3 is `./build.sh`; the submission is generated, so there is 
 forget to update.
 
 **The overrides carry no comments** — they describe the vendor's board, not our changes. Departures
-from the factory tree are `armbian.patch`, and go in `header.dts` one line each.
+from the factory tree are `firmware/<stock>/board.patch`, and go in `header.dts` one line each.
 
 ## Files
 
-One directory per board, named after the installed dtb — `r69-xr821/`, `h96max-zx/`. Two files are
-source; the rest is generated and gitignored.
+One directory per board, named after the installed dtb — `r69-xr821/`, `h96max-zx/`; `<stock>` is
+that board's `firmware/` and `stock/` name (`r69`, `h96max`). Only `header.dts` is source here; the
+rest is generated and gitignored.
 
-| File                      | What                                                 |
-| ------------------------- | ---------------------------------------------------- |
-| `armbian.patch`           | **source** — the grafts, against the factory tree    |
-| `header.dts`              | **source** — SPDX and the board's provenance block   |
-| `board.dtb` / `board.dts` | factory blob and its decompile                       |
-| `armbian.dts` / `.dtb`    | patch applied                                        |
-| `armbian-consts.dts`      | `dt-bindings` names instead of hex                   |
-| `armbian-native.dts`      | **the submission** — header plus generated overrides |
-| `armbian-native.dtb`      | built from it, gated against `armbian.dtb`           |
+| File                                 | What                                                 |
+| ------------------------------------ | ---------------------------------------------------- |
+| `../../firmware/<stock>/board.patch` | **source** — the grafts, against the factory tree    |
+| `header.dts`                         | **source** — SPDX and the board's provenance block   |
+| `board.dtb` / `board.dts`            | factory blob and its decompile                       |
+| `armbian.dts` / `.dtb`               | patch applied                                        |
+| `armbian-consts.dts`                 | `dt-bindings` names instead of hex                   |
+| `armbian-native.dts`                 | **the submission** — header plus generated overrides |
+| `armbian-native.dtb`                 | built from it, gated against `armbian.dtb`           |
 
 ## Why a diff
 
@@ -74,5 +76,6 @@ the submission and exits 0.
 | `KERNEL` / `KERNEL_URL` / `KERNEL_REV` | `upstream/.kernel`, armbian/linux-rockchip, pinned |
 | `BOARD` / `STOCK` / `SOC` / `BASE`     | board dir, `stock/` dir, SoC, reference dtsi       |
 
-`build.sh` builds `$BOARD`; a second board is another directory with its patch, built by overriding
-`BOARD`, `STOCK`, `SOC` and `BASE`. Nothing in the patched `dtc` or `scripts/` is board-specific.
+`build.sh` builds `$BOARD`; a second board is another directory plus its `board.patch`, built by
+overriding `BOARD`, `STOCK`, `SOC` and `BASE`. Nothing in the patched `dtc` or `scripts/` is
+board-specific.

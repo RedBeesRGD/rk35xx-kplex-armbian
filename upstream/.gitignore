@@ -1,4 +1,3 @@
-# Only armbian.patch and header.dts are source; build.sh regenerates the rest.
 .kernel/
 */board.dtb
 */board.dts

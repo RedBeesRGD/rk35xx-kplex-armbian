@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Regenerate a board's submission set from its factory blob and patch. See README.md.
+# Regenerate a board's submission set from its factory blob and firmware/<board>/board.patch.
+# See README.md.
 #
 # The include-based extras need the kernel's dt-bindings and the reference board dtsi. Pinned to
 # the commit our work branches from, fetched sparsely (50M of a 1.8G tree). Set KERNEL to reuse a
@@ -26,13 +27,15 @@ cpp_dts() { cc -E -nostdinc -undef -D__DTS__ -x assembler-with-cpp -I "$KERNEL/i
 cp stock/$STOCK/board.dtb $B/board.dtb
 $DTC -I dtb -O dts -P -n $B/board.dtb 2>/dev/null > $B/board.dts
 cp $B/board.dts $B/armbian.dts
-patch -s $B/armbian.dts < $B/armbian.patch
+patch -s $B/armbian.dts < firmware/$STOCK/board.patch
 $DTC -@ -I dts -O dtb -o $B/armbian.dtb $B/armbian.dts 2>/dev/null
 
 # The overlay ships firmware/<board>/board.dtb, which may deliberately differ from the submission:
 # a downstream workaround for a kernel fix that has not merged yet. Never overwrite it silently.
 set +x
-if cmp -s $B/armbian.dtb firmware/$STOCK/board.dtb; then
+# compare the .dts too: a comment-only edit leaves the dtb identical, and those comments are
+# the documentation board.dts carries
+if cmp -s $B/armbian.dtb firmware/$STOCK/board.dtb && cmp -s $B/armbian.dts firmware/$STOCK/board.dts; then
 	echo "firmware/$STOCK: matches the submission"
 elif [ "${SYNC:-0}" = 1 ]; then
 	cp $B/armbian.dts firmware/$STOCK/board.dts

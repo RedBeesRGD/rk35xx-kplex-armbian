@@ -109,7 +109,7 @@ and the tree just keeps the kernel's hands off.
 Rockchip's SoC dtsi disables everything and the board file enables what's wired. Only in-SoC blocks
 needing no board routing are candidates.
 
-- **The grafts live in `upstream/<board>/armbian.patch`**; `upstream/build.sh` produces
+- **The grafts live in `firmware/<board>/board.patch`**; `upstream/build.sh` produces
   `firmware/<board>/board.dts` + `.dtb` from it under `SYNC=1`, and otherwise just reports that the
   two differ. Edit the patch, never `firmware/` — except where a board diverges on purpose, which
   belongs in its `dtb.md` with the condition that ends it.
