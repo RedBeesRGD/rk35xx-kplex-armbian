@@ -6,13 +6,13 @@
 0755 common/rk35xx-firstboot                         /usr/local/sbin/rk35xx-firstboot
 0644 common/rk35xx-firstboot.service                 /etc/systemd/system/rk35xx-firstboot.service
 
-# Seekwave Wi-Fi/BT: module autoload + firmware (chip code + board calibration; see seekwave-fw/)
-0644 h96max/seekwave-modules.conf                    /etc/modules-load.d/seekwave.conf
-0644 h96max/seekwave-fw/SWT6621S_DRAM_SDIO.bin       /lib/firmware/SWT6621S_DRAM_SDIO.bin
-0644 h96max/seekwave-fw/SWT6621S_IRAM_SDIO.bin       /lib/firmware/SWT6621S_IRAM_SDIO.bin
-0644 h96max/seekwave-fw/SWT6621S_NV_SDIO.bin         /lib/firmware/SWT6621S_NV_SDIO.bin
-0644 h96max/seekwave-fw/SWT6621S_SEEKWAVE_R00001.bin /lib/firmware/SWT6621S_SEEKWAVE_R00001.bin
-0644 h96max/seekwave-fw/sv6160lite.nvbin             /lib/firmware/sv6160lite.nvbin
+# Seekwave Wi-Fi/BT: module autoload + firmware, all shared (see common/seekwave-fw/README.md)
+0644 common/seekwave-modules.conf                           /etc/modules-load.d/seekwave.conf
+0644 common/seekwave-fw/SWT6621S_DRAM_SDIO.bin              /lib/firmware/SWT6621S_DRAM_SDIO.bin
+0644 common/seekwave-fw/SWT6621S_IRAM_SDIO.bin              /lib/firmware/SWT6621S_IRAM_SDIO.bin
+0644 common/seekwave-fw/SWT6621S_NV_SDIO_STANDALONE_FDD.bin /lib/firmware/SWT6621S_NV_SDIO.bin
+0644 common/seekwave-fw/SWT6621S_SEEKWAVE_R00001.bin        /lib/firmware/SWT6621S_SEEKWAVE_R00001.bin
+0644 common/seekwave-fw/sv6160lite.nvbin                    /lib/firmware/sv6160lite.nvbin
 
 # DKMS build files (sources fetched at image build; rk35xx-firstboot builds whatever is staged)
 0644 common/rockchip-pwm-remotectl-rk35xx/Makefile   /usr/src/rockchip-pwm-remotectl-rk35xx-1.0/Makefile

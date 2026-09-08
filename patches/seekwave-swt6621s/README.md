@@ -1,7 +1,7 @@
 # seekwave-swt6621s — driver patches
 
 Fixes for the H96 Max's Wi-Fi/BT driver, applied to the pinned source by
-`firmware/h96max/fetch-seekwave-src.sh` at image build and by `rk35xx-update` on a live box. Applied
+`firmware/common/fetch-seekwave-src.sh` at image build and by `rk35xx-update` on a live box. Applied
 in filename order.
 
 | Patch  | PR                                                           | Fixes                                            |
@@ -13,5 +13,5 @@ in filename order.
 and against an AP that holds a session for minutes it would renegotiate a healthy link every
 interval. It is in `research/seekwave-tx-latch-bug/patches/`.
 
-Both apply to pinned commit `b1b15016`. `./firmware/h96max/fetch-seekwave-src.sh <dir>` fetches and
+Both apply to pinned commit `b1b15016`. `./firmware/common/fetch-seekwave-src.sh <dir>` fetches and
 patches into `<dir>`, which is how to check they still apply after a version bump.
