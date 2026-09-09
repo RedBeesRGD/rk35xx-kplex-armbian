@@ -1083,7 +1083,8 @@
 		iommus = <&vop_mmu>;
 		rockchip,grf = <&grf>;
 		status = "okay";
-		esmart_lb_mode = [03];
+		/* factory 03 caps every Esmart window at 2K; 02 gives Esmart0 a 4K line buffer */
+		esmart_lb_mode = [02];
 		support-multi-area;
 		phandle = <0xea>;
 

@@ -30,7 +30,17 @@
  		assigned-clocks = <&scmi_clk 0x16>;
  		assigned-clock-rates = <0x11e1a300>;
  		power-domains = <&power 0x04>;
-@@ -1384,7 +1387,10 @@
+@@ -1080,7 +1083,8 @@
+ 		iommus = <&vop_mmu>;
+ 		rockchip,grf = <&grf>;
+ 		status = "okay";
+-		esmart_lb_mode = [03];
++		/* factory 03 caps every Esmart window at 2K; 02 gives Esmart0 a 4K line buffer */
++		esmart_lb_mode = [02];
+ 		support-multi-area;
+ 		phandle = <0xea>;
+ 
+@@ -1384,7 +1388,10 @@
  		reg-shift = <0x02>;
  		reg-io-width = <0x04>;
  		dmas = <&dmac 0x09 &dmac 0x08>;
@@ -42,7 +52,7 @@
  		phandle = <0xf3>;
  	};
  
-@@ -1668,7 +1674,8 @@
+@@ -1668,7 +1675,8 @@
  		status = "okay";
  		remote_pwm_id = <0x03>;
  		handle_cpu_id = <0x01>;
@@ -52,7 +62,7 @@
  		phandle = <0x107>;
  
  		ir_key1 {
-@@ -1784,7 +1791,8 @@
+@@ -1784,7 +1792,8 @@
  		clocks = <&cru 0x73 &cru 0x72>;
  		clock-names = "tclk", "pclk";
  		interrupts = <0x00 0x1c 0x04>;
@@ -62,7 +72,7 @@
  		phandle = <0x10d>;
  	};
  
-@@ -2082,11 +2090,9 @@
+@@ -2082,11 +2091,9 @@
  		pinctrl-names = "default";
  		pinctrl-0 = <&sdmmc_clk &sdmmc_cmd &sdmmc_det &sdmmc_bus4>;
  		rockchip,default-sample-phase = <0x5a>;
@@ -76,7 +86,7 @@
  		vqmmc-supply = <&vccio_sd>;
  		vmmc-supply = <&vcc_sd>;
  		phandle = <0x114>;
-@@ -4104,7 +4110,9 @@
+@@ -4104,7 +4111,9 @@
  		compatible = "gpio-leds";
  		phandle = <0x1c7>;
  
@@ -87,7 +97,7 @@
  			gpios = <&gpio4 0x11 0x01>;
  			linux,default-trigger = "none";
  			default-state = "on";
-@@ -4112,7 +4120,8 @@
+@@ -4112,7 +4121,8 @@
  			retain-state-shutdown;
  		};
  
@@ -97,7 +107,7 @@
  			gpios = <&gpio4 0x0b 0x01>;
  			linux,default-trigger = "none";
  			default-state = "off";
-@@ -4121,10 +4130,7 @@
+@@ -4121,10 +4131,7 @@
  		};
  	};
  
@@ -109,7 +119,7 @@
  
  	fiq-debugger {
  		compatible = "rockchip,fiq-debugger";
-@@ -4135,7 +4141,8 @@
+@@ -4135,7 +4142,8 @@
  		interrupts = <0x00 0xba 0x04>;
  		pinctrl-names = "default";
  		pinctrl-0 = <&uart0m0_xfer>;
