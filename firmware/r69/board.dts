@@ -7,7 +7,7 @@
 	interrupt-parent = <&gic>;
 	#address-cells = <0x02>;
 	#size-cells = <0x02>;
-	model = "R69 XR821_V1.1 (Rockchip RK3518 EVB1 DDR4 V10 Board)";
+	model = "R69 XR821_V1.1";
 
 	aliases {
 		ethernet0 = "/ethernet@ffbd0000";
