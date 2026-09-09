@@ -10,7 +10,7 @@
 #
 # Deliberately does NOT redo the one-time image-build steps (rebrand, the unit-enable drop-in, the
 # console/armbianEnv edit, board drop-ins) — those are already in place on a booted box, and the
-# Wi-Fi/Bluetooth fixups live in the board's first-boot script. The bootloader (idbloader/u-boot.itb)
+# Wi-Fi/Bluetooth fixups live in the board's first-boot script. The bootloader (idbloader/uboot.itb)
 # is never touched here; changing it on a live boot device is a separate, riskier operation.
 set -e
 [ "$(id -u)" = 0 ] || { echo "run as root (sudo rk35xx-update)"; exit 1; }
@@ -79,6 +79,12 @@ OLD_DTB="$(dtbsum)"
 # Delete artifacts of earlier layouts. Paths are named here only so they can be removed; what the
 # payload installs is payload.list.
 migrate() {
+	# u-boot.itb was renamed to uboot.itb; the payload install right after this puts the new one in
+	if [ -e "$SHARE/u-boot.itb" ]; then
+		echo "  migrating: removing $SHARE/u-boot.itb"
+		rm -f "$SHARE/u-boot.itb"
+	fi
+
 	old_units="r69-firstboot.service r69-mac-pin.service r69-bt.service"
 	for u in $old_units; do
 		[ -e "/etc/systemd/system/$u" ] || continue

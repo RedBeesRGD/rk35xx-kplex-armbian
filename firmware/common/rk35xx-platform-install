@@ -3,7 +3,7 @@ DIR=/usr/local/share/rk35xx
 
 write_uboot_platform() {
 	dd if="$1/factory_idbloader.bin" of="$2" seek=64 conv=notrunc status=none
-	dd if="$1/u-boot.itb" of="$2" seek=16384 conv=notrunc status=none
+	dd if="$1/uboot.itb" of="$2" seek=16384 conv=notrunc status=none
 	sync
 }
 

@@ -47,7 +47,7 @@
 
 # board loader pair + write_uboot_platform override (armbian-install soft-brick guard)
 0644 h96max/factory_idbloader.bin                    /usr/local/share/rk35xx/factory_idbloader.bin
-0644 common/u-boot.itb                               /usr/local/share/rk35xx/u-boot.itb
+0644 common/uboot.itb                                /usr/local/share/rk35xx/uboot.itb
 0644 common/rk35xx-platform-install                  /usr/lib/u-boot/platform_install.sh
 
 # hardware watchdog: systemd pings it, the SoC resets the box if it stops (node enabled in board.dtb)

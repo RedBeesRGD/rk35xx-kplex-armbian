@@ -9,15 +9,15 @@ A thin layer of fixes over a stock Armbian image, not a distro. Kernel and users
 upstream; we carry only what upstream can't know. **Adding a board is data, not code** — one
 `firmware/<board>/` directory. If a change needs new code per board, the design is wrong.
 
-| Tree                | Holds                                                                        |
-| ------------------- | ---------------------------------------------------------------------------- |
-| `firmware/<board>/` | `board.conf`, `board.dts`/`.patch`/`.dtb`, `payload.list`, factory idbloader |
-| `firmware/common/`  | everything shared between boards                                             |
-| `upstream/<board>/` | the submission header, and the generated submission set                      |
-| `docs/<board>/`     | `worklog.md` (history), `dtb.md` (tree changes), `board.md` (usage)          |
-| `stock/<board>/`    | factory evidence: dumps, logs, the box's own DTB                             |
-| `backup/<board>/`   | eMMC images (gitignored)                                                     |
-| `patches/<tool>/`   | fixes to host tools we build ourselves, formatted to send upstream           |
+| Tree                | Holds                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| `firmware/<board>/` | `board.conf`, `board.dts`/`.patch`/`.dtb`, `uboot.dts`/`.patch`, `payload.list`, factory idbloader |
+| `firmware/common/`  | everything shared between boards                                                                   |
+| `upstream/<board>/` | the submission header, and the generated submission set                                            |
+| `docs/<board>/`     | `worklog.md` (history), `dtb.md` (tree changes), `board.md` (usage)                                |
+| `stock/<board>/`    | factory evidence: dumps, logs, the box's own DTB                                                   |
+| `backup/<board>/`   | eMMC images (gitignored)                                                                           |
+| `patches/<tool>/`   | fixes to host tools we build ourselves, formatted to send upstream                                 |
 
 **Repo filenames mirror the names installed on disk**, and every board installs under the `rk35xx-`
 prefix — `BOARD_PREFIX` in `board.conf` drives every installed path. A board directory holds
@@ -28,10 +28,11 @@ hook, or a unit for hardware only it has (the R69's `rk35xx-bt`).
 
 **Tools we build, and must:** `dtc` (`./build-dtc.sh` — vanilla cannot round-trip a vendor blob with
 `&label`s) · `e2tools` (`./build-e2tools.sh` — the stock one corrupts an image on delete) ·
-`rkdeveloptool` + a per-board maskrom loader (`./build-rktools.sh`) · `u-boot.itb`
-(`./build-uboot.sh`). **From the host:** `fdtput` · `fsck.ext4` (keg-only on Homebrew:
-`/opt/homebrew/opt/e2fsprogs/sbin/`) · `xz` · `npx prettier`. **On the box:** `evtest`, `fio`,
-`stress-ng`, `iw`, `bluez`.
+`rkdeveloptool` + a per-board maskrom loader (`./build-rktools.sh`) · a per-board `uboot.dts`
+(`./build-uboot-dts.sh`) and the `uboot.itb` a board ships (`./build-uboot.sh`; boards that do not
+ship their own use `firmware/common/uboot.itb`). **From the host:** `fdtput` · `fsck.ext4` (keg-only
+on Homebrew: `/opt/homebrew/opt/e2fsprogs/sbin/`) · `xz` · `npx prettier`. **On the box:** `evtest`,
+`fio`, `stress-ng`, `iw`, `bluez`.
 
 ## Where things are written down
 

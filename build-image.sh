@@ -4,7 +4,7 @@
 # Takes a stock Armbian rk35xx (vendor 6.1) base image — the ROCK 2F image, used only as the
 # donor of the kernel/rootfs/boot plumbing — and bakes in everything board-specific:
 #   - the board's factory idbloader @ sector 64   (the only DDR config stable on its DRAM die)
-#   - our shared u-boot.itb @ sector 16384        (mainline + BL31 v1.21; build-uboot.sh)
+#   - the board's uboot.itb @ sector 16384        (mainline + BL31 v1.21; build-uboot.sh)
 #   - the board device tree                       (firmware/<board>/board.dtb)
 #   - the firmware payload                        (firmware/<board>/payload.list)
 #   - DKMS driver sources fetched on this host    (built offline on first boot)
@@ -35,7 +35,7 @@ if [ -n "${3:-}" ]; then OUT="$3"; else
 fi
 
 IDBLOADER="$FW/$BOARD_IDBLOADER"          # -> sector 64
-UBOOT="$FW/common/u-boot.itb"             # -> sector 16384
+UBOOT="$FW/$BOARD_UBOOT"                  # -> sector 16384
 DTB="$FW/$BOARD_DTB"
 PAYLOAD="$FW/$BOARD_PAYLOAD"
 IDBLOADER_SEEK=64
@@ -74,7 +74,7 @@ case "$BASE" in
 esac
 
 # ---- 2. factory bootloader (raw sectors, before the first partition) -----------------
-echo "[2/5] Overlaying $BOARD factory idbloader @${IDBLOADER_SEEK} + our u-boot.itb @${UBOOT_SEEK}"
+echo "[2/5] Overlaying $BOARD factory idbloader @${IDBLOADER_SEEK} + our uboot.itb @${UBOOT_SEEK}"
 dd if="$IDBLOADER" of="$OUT" bs=512 seek="$IDBLOADER_SEEK" conv=notrunc 2>/dev/null
 dd if="$UBOOT"     of="$OUT" bs=512 seek="$UBOOT_SEEK"     conv=notrunc 2>/dev/null
 

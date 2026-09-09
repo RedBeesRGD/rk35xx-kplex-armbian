@@ -3,10 +3,35 @@
 Two blobs at two sectors, from two different origins. Write them **after** the OS image — write them
 first and the image's own loader overwrites them.
 
-| Sector | Blob                                     | Origin                                  |
-| ------ | ---------------------------------------- | --------------------------------------- |
-| 64     | `firmware/<board>/factory_idbloader.bin` | carved from that box's eMMC — **kept**  |
-| 16384  | `firmware/common/u-boot.itb`             | built here by `build-uboot.sh` — shared |
+| Sector | Blob                                     | Origin                                 |
+| ------ | ---------------------------------------- | -------------------------------------- |
+| 64     | `firmware/<board>/factory_idbloader.bin` | carved from that box's eMMC — **kept** |
+| 16384  | `uboot.itb` — see the table below        | built here by `build-uboot.sh`         |
+
+## Which loader each board ships
+
+Per-board U-Boot is built from the box's own factory tree, but **swapping a running bootloader for
+one that has never booted is not a free change**, so it is enabled per board rather than
+family-wide.
+
+`board.conf` decides: `BOARD_UBOOT=<board>/uboot.itb` ships that board's own FIT,
+`BOARD_UBOOT=common/uboot.itb` boots the shared one. The shared FIT is **mainline's `rk3528-generic`
+tree, unpatched** — no board DT and no `CONFIG_ADC`, so on a board that boots it the recovery button
+does not reach Maskrom from U-Boot. Which one a board uses, and whether it has ever booted its own,
+belongs in that board's `board.md`.
+
+**Nothing per-board is kept for a board that has never booted a build of its own** — no graft, no
+tree. With no arguments `build-uboot.sh` builds only the boards whose `board.conf` names their own
+`uboot.itb`, so it produces no FIT that nothing installs.
+
+To enable a board: write `firmware/<board>/uboot.patch` against that box's
+`stock/<board>/uboot.dtb`, run `./build-uboot-dts.sh <board>` and `./build-uboot.sh <board>`, boot
+it once with serial attached, confirm the recovery button reaches Maskrom — then commit the graft
+and point `BOARD_UBOOT` and the `payload.list` line at `<board>/uboot.itb`.
+
+`build-image.sh` fills all five BootROM idbloader slots (64, 1088, 2112, 3136, 4160) and both U-Boot
+slots. The file was called `u-boot.itb` before 2026-09-05, on disk as well as in the repo;
+`rk35xx-update` removes the old name on the first run that installs the new one.
 
 ## Why the idbloader stays factory
 
@@ -18,15 +43,113 @@ A backup recovers only the DDR half, so `build-rktools.sh` builds a maskrom USB 
 (that board's DDR init + Rockchip's `usbplug`). Build it natively — USB does not reach a container
 on macOS.
 
-## Why `u-boot.itb` is built rather than taken
+> ⚠️ **Our U-Boot still serves nothing on USB.** The vendor U-Boot runs rockusb, so `rkdeveloptool`
+> can always reach the box. Ours has `# CONFIG_USB is not set` and `CONFIG_NO_NET=y`, so once it
+> runs the only interfaces are serial and the recovery button. Adding USB is not a config flip:
+> mainline's `rk3528.dtsi` describes no USB controller at all. `docs/todo/rk35xx-uboot-usb.md` has
+> the analysis and what fixing it would buy.
 
-No third-party prebuilt, every input pinned, the build reproducible.
+## The tree is the factory tree, retargeted
 
-| Input  | Pin                                                    |
-| ------ | ------------------------------------------------------ |
-| U-Boot | mainline tag `v2026.04`, `generic-rk3528_defconfig`    |
-| BL31   | `rk3528_bl31_v1.21.elf` from `rkbin`, pinned by commit |
-| TPL    | `rk3528_ddr_1056MHz_v1.13.bin` — build input only      |
+Same rule as everywhere else here: **follow the factory DTB and graft the minimum.** The U-Boot tree
+is built the way `board.dts` is — decompile the box's own blob, then apply a small commented patch.
+
+```sh
+./build-uboot-dts.sh            # stock/<board>/uboot.dtb -> firmware/<board>/uboot.dts
+```
+
+Two stages, each auditable alone:
+
+1. **Mechanical.** `dtc -P` decompiles the blob — and the result is checked to recompile
+   **byte-identical**, so the base really is the board's own. Then
+   `upstream/scripts/uboot-renumber.py` retargets it at mainline's bindings.
+2. **Judgement.** `firmware/<board>/uboot.patch`, every hunk carrying its reason.
+
+### Why a retarget is needed at all
+
+A clock reference is `<&cru N>`. The phandle picks the controller and survives untouched; `N` is an
+index into whichever driver reads it, and the vendor and mainline number the same clocks
+differently:
+
+| Node              | vendor    | mainline  |
+| ----------------- | --------- | --------- |
+| saradc clk/pclk   | 257 / 256 | 195 / 194 |
+| eMMC, five clocks | 163–167   | 140–144   |
+| sdmmc cclk/hclk   | 408 / 407 | 295 / 296 |
+
+Mainline reads the vendor's 257 as `ACLK_VOP_BIU` and its 163 as `PCLK_UART7`. Nothing errors — the
+eMMC just gets clocked against a UART. `board.dts` needs no such pass because a vendor tree meets a
+vendor kernel there; our U-Boot is mainline.
+
+The blob stores only the integer and no decompiler can recover which symbol produced it, so the
+**vendor header is the dictionary** (`upstream/.kernel`, fetched by `upstream/build.sh`) and
+mainline's supplies the new value. Resets need a spelling rule too — vendor `SRST_PRESETN_SARADC`,
+mainline `SRST_P_SARADC`. Per board: 29 clock cells, 11 reset cells, 40 phase tags
+(`u-boot,dm-pre-reloc` → `bootph-all`, `u-boot,dm-spl` → `bootph-pre-ram`).
+
+**A cell that does not map to exactly one value stops the build**, never guessed and never shipped:
+a half-retargeted tree carries vendor indices mainline reads as other clocks. `SCMI_*` names are
+kept out of the dictionary — they address the `scmi_clk` provider and can never appear in a
+`<&cru N>` cell, while collecting them collided with the whole low CRU range. No board here produces
+an unmapped cell.
+
+### What the patch grafts
+
+- **model** — U-Boot's banner prints it, and three near-identical boxes are otherwise all "Rockchip
+  RK3528 Evaluation Board" on a serial console. The root `compatible` is left as the vendor set it:
+  nothing in U-Boot matches on it, and the control DT never reaches the kernel.
+- **a uart0 node**, and `stdout-path` moved to it. The factory tree holds exactly one serial node —
+  uart2 at `ffa00000`, `status = "okay"` — and points `stdout-path` at it. Mainline resolves that
+  and binds it, so left alone the console lands on uart2 and the debug header falls silent once
+  pre-relocation `DEBUG_UART` output stops. The header is uart0; the factory tree describes no uart0
+  because vendor U-Boot reaches it from code instead (`PreSerial: 0, raw, 0xff9f0000`), and mainline
+  has no equivalent.
+- **`vdd-microvolts` on saradc** — mainline's driver fails probe with no `vref-supply` and no
+  explicit reference; the vendor's defaulted.
+- **`sdmmc` disabled, 3518D only** — no SD slot; SPL then falls straight through to eMMC.
+
+`rk3528-u-boot.dtsi` is deliberately not used: it patches upstream labels a stock-derived tree has
+none of, and the phase tags it would add are already present. The per-board `-u-boot.dtsi` the build
+writes pulls in `rockchip-u-boot.dtsi` for binman and nothing else — that file references only its
+own labels. (It keeps the dash: `-u-boot.dtsi` is the name upstream's Makefile globs for.)
+
+## The recovery button, and why the tree is per board
+
+🟡 **Implemented and verified in the artifact, not yet on hardware.** Holding the recovery button at
+boot should make U-Boot set the download flag and reset into Maskrom, with no serial needed. What
+makes it work:
+
+| Piece                                     | Where                                                             |
+| ----------------------------------------- | ----------------------------------------------------------------- |
+| `CONFIG_ADC` + `CONFIG_SARADC_ROCKCHIP`   | `build-uboot.sh` patches them into the generic defconfig          |
+| `saradc` node enabled, with a vref        | `firmware/<board>/uboot.dts`                                      |
+| `setup_boot_mode()` → `board_late_init()` | mainline, already wired; the flag register defaults to `ff370200` |
+
+**The node has to be named `saradc@ffae0000`.** `rockchip_dnl_key_pressed()` walks the ADC uclass
+and matches the first six characters of the device name against `saradc`. Upstream `rk3528.dtsi`
+calls it `adc@ffae0000`, which the function cannot see — the factory tree calls it `saradc@ffae0000`
+and works untouched. One more thing following the vendor gets for free that a hand-written tree has
+to discover the hard way.
+
+The eMMC tuning is per board, so the tree cannot be shared either — speed mode, `max-frequency` and
+`fixed-emmc-driver-type` all differ between boxes. Each is measured from that box's factory U-Boot
+DT in `stock/<board>/uboot.dts`, inherited automatically by a tree derived from one, and recorded in
+that board's `board.md`.
+
+The control DTB lives inside the FIT, so a per-board tree means a per-board `uboot.itb`.
+
+## Why `uboot.itb` is built rather than taken
+
+No third-party prebuilt, every input pinned. **Not byte-reproducible**: U-Boot bakes its build
+timestamp into the version string (`U-Boot 2026.04 (Sep 06 2026 - 01:39:10)`), so two builds of the
+same tree differ. The control DTB inside is identical — diff that, not the FIT, when checking a
+rebuild changed nothing.
+
+| Input  | Pin                                                                                     |
+| ------ | --------------------------------------------------------------------------------------- |
+| U-Boot | mainline tag `v2026.04`, `generic-rk3528_defconfig` (per-board adds the DT and the ADC) |
+| BL31   | `rk3528_bl31_v1.21.elf` from `rkbin`, pinned by commit                                  |
+| TPL    | `rk3528_ddr_1056MHz_v1.13.bin` — build input only                                       |
 
 - **BL31 v1.20 is the floor.** RK3518 support landed there; older ATF stops at `Unknown SoC`.
   Armbian's own `linux-u-boot-rock-2f-vendor` builds against `rk3528_bl31_v1.17.elf` — its
@@ -50,14 +173,21 @@ No third-party prebuilt, every input pinned, the build reproducible.
 ## Rebuilding
 
 ```sh
-./build-uboot.sh            # Linux; writes firmware/common/u-boot.itb, scratch in uboot-build/
-./build-uboot-finch.sh      # macOS; same build in a native arm64 Debian container
+./build-uboot.sh                    # Linux; boards that ship their own, scratch in uboot-build/
+./build-uboot.sh <board> [<board>…]   # macOS: ./build-uboot-finch.sh, same arguments
+./build-uboot.sh common             # the shared firmware/common/uboot.itb, from the generic tree
 
-strings -a firmware/common/u-boot.itb | grep -E 'bl31-v|fdt-rk3528'   # identify a suspect blob
-# bl31-v1.21 / fdt-rk3528-generic
+strings -a firmware/<board>/uboot.itb | grep -E 'bl31-v|fdt-rk3528'   # identify a suspect blob
+# bl31-v1.21 / fdt-rk3528-<board>
 
-sudo dd if=firmware/common/u-boot.itb of=/dev/<sd> bs=512 seek=16384 conv=notrunc; sync
+sudo dd if=firmware/<board>/uboot.itb of=/dev/<sd> bs=512 seek=16384 conv=notrunc; sync
 ```
+
+Each board builds out-of-tree into `uboot-build/out-<board>/`, from a defconfig generated on the
+spot out of mainline's `generic-rk3528_defconfig`. Nothing is stored that upstream already ships —
+`firmware/<board>/uboot.patch` is the only device-tree source we keep — the `.dts` it produces is a
+build artifact — and the build aborts if the generic defconfig stops disabling the ADC in the way
+the patch expects.
 
 Smoke-test before trusting it: the factory idbloader at sector 64 stays put, and it must reach an
 Armbian login over serial.
