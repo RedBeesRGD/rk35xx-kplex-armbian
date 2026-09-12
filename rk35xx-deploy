@@ -34,7 +34,7 @@ DEST=/usr/local/share/${BOARD_PREFIX:?board.conf must set BOARD_PREFIX}/repo
 echo "→ syncing repo to $HOST:$DEST"
 tar czf - -C "$REPO" \
   --exclude=.git --exclude=images --exclude=uboot-build --exclude='backup*' --exclude='*.img' --exclude='*.img.xz' . \
-  | ssh "$HOST" "sudo mkdir -p '$DEST' && sudo tar xzf - -C '$DEST'"
+  | ssh "$HOST" "sudo mkdir -p '$DEST' && sudo tar xzf - --no-same-owner -C '$DEST'"
 
 echo "→ applying on $HOST  (rk35xx-update --board $BOARD $REBOOT_ARG)"
 ssh -t "$HOST" "sudo '$DEST/rk35xx-update' --board '$BOARD' $REBOOT_ARG"

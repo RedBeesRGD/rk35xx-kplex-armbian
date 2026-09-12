@@ -76,6 +76,10 @@ replicate() {
 }
 
 
+# e2tools default to the host's uid/gid inside the image
+e2cp() { command e2cp -O 0 -G 0 "$@"; }
+e2mkdir() { command e2mkdir -O 0 -G 0 "$@"; }
+
 # ---- preflight: everything checked before the first byte is written -------------------
 PAYLOAD_SRCS="$(sed -E 's/^[[:space:]]*#.*//; /^[[:space:]]*$/d' "$PAYLOAD" | awk '{print $2}')"
 for f in "$BASE" "$IDBLOADER" "$UBOOT" "$DTB" "$PAYLOAD" "$BOARD_NAME_FILE" "$FW/common/fetch-dkms-src.sh"; do
