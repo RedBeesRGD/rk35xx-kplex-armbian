@@ -24,8 +24,7 @@ The one idea everything hangs off:
 > override only what's board-specific — U-Boot, a couple of drivers, and the device tree.**
 
 (The device tree here originally started from the ROCK 2F's too. That was a mistake, corrected on
-2026-08-09 — it now derives from the box's own factory Android DTB; see the last entry and
-[dtb.md](dtb.md).)
+2026-08-09 — it now derives from the box's own factory Android DTB; see the last entry and dtb.md.)
 
 The rest is the **play-by-play** — every step, trap, and dead end, in the order we hit them.
 
@@ -60,8 +59,8 @@ The obvious doors were all locked:
   the box is also a host → role collision. Converting the box's A port to C doesn't help either.)
   There **is** a recovery button in the AV jack — the recessed one, held at power-on, is the
   BootROM's maskrom trigger, verified 2026-08-14 (enumerates as `2207:350c` over A-to-A); see
-  [board.md](board.md#toothpick-button). An earlier version of this entry said there wasn't, which
-  made maskrom look far less reachable than it is. _(corrected 2026-08-14)_
+  board.md. An earlier version of this entry said there wasn't, which made maskrom look far less
+  reachable than it is. _(corrected 2026-08-14)_
 
 The door that _did_ open was the **debug UART** — the 3 wires above, on the 4-pad header by the SD
 slot: pinout **GND · TX · RX · 3V3** (square pad = GND; wire GND/TX/RX and cross adapter TX↔RX).
@@ -319,9 +318,8 @@ and the `rock-2f`→R69 **identity rename** are all done now; the `fd650` front-
 The bundled remote drives the box over **infrared** — a Rockchip PWM-capture receiver on `pwm3`
 (`ffa90030`) decodes all 22 keys. The **voice** and **mouse-mode** buttons press as plain keys over
 IR; their real functions ride the remote's **BLE** side, which was later verified here — pairing
-brings up an air-mouse node and a battery reading (see [board.md](board.md)). Voice _audio_ stays
-out of scope: it rides the proprietary Android-TV `0xfeb3` GATT service, established on the
-[H96 Max](../h96max/board.md#remote).
+brings up an air-mouse node and a battery reading (see board.md). Voice _audio_ stays out of scope:
+it rides the proprietary Android-TV `0xfeb3` GATT service, established on the H96 Max.
 
 ### IR: a shared-IRQ fix shipped as an out-of-tree module
 
@@ -583,10 +581,9 @@ RAM+eMMC part, eMMC half `manfid 0x15`.)
 ## Building our own u-boot
 
 We still build our own `u-boot.itb` — not for RAM, but to **own the bootloader**: no third-party
-prebuilt, every input pinned so the build is reproducible. [`build-uboot.sh`](../../build-uboot.sh)
-builds **mainline U-Boot** (pinned tag `v2026.04`) + Rockchip's **ATF blob** (BL31 v1.21, from
-`rkbin` pinned by commit), keeping the factory idbloader so only `u-boot.itb` @ sector 16384
-changes:
+prebuilt, every input pinned so the build is reproducible. `build-uboot.sh` builds **mainline
+U-Boot** (pinned tag `v2026.04`) + Rockchip's **ATF blob** (BL31 v1.21, from `rkbin` pinned by
+commit), keeping the factory idbloader so only `u-boot.itb` @ sector 16384 changes:
 
 ```sh
 ./build-uboot.sh            # builds straight into firmware/common/u-boot.itb (scratch in uboot-build/)
@@ -604,9 +601,9 @@ changes:
   idbloader is discarded. The TPL choice can't affect the FIT (ATF + u-boot), so the build stays
   reproducible on the u-boot + BL31 pins alone.
 
-On macOS there's no native Linux, so [`build-uboot-finch.sh`](../../build-uboot-finch.sh) runs the
-build in a **native arm64 Linux container** via [Finch](https://github.com/runfinch/finch) (lighter
-than Docker Desktop; the same `finch run` would work with `docker`):
+On macOS there's no native Linux, so `build-uboot-finch.sh` runs the build in a **native arm64 Linux
+container** via [Finch](https://github.com/runfinch/finch) (lighter than Docker Desktop; the same
+`finch run` would work with `docker`):
 
 ```sh
 brew install finch          # once (the VM auto-starts on first run)
@@ -664,7 +661,7 @@ an R69 (or a similar RK3518 box) running well.
   medium it booted**, so an SD-booted box never sees the assigned address sitting in the eMMC store.
   It is stable per card, not per box. (`MACAddressPolicy=persistent` is inert here — systemd skips a
   device that claims a permanent address. This entry used to credit it; that was wrong.) Corrected
-  2026-08-13; see [armbian-r69.md](../armbian-r69.md).
+  2026-08-13; see armbian-r69.md.
 
 **Power — there is no PMIC**
 
@@ -761,9 +758,9 @@ old script meets the new tree) — the pull has already succeeded, so simply run
 
 ### 2026-08-09 — changes that reached the R69 from the second board's bring-up
 
-Porting to the [H96 Max](../h96max/worklog.md) turned the repo into a two-board builder, and several
-of its findings apply here. Everything below is already in the R69 image; **`r69-update` picks it
-all up** on a deployed box.
+Porting to the H96 Max turned the repo into a two-board builder, and several of its findings apply
+here. Everything below is already in the R69 image; **`r69-update` picks it all up** on a deployed
+box.
 
 - **Hardware watchdog, enabled.** `snps,dw-wdt` @ `ffac0000` was `disabled` in the factory tree on
   both boards — vendor policy, not missing silicon. Now `okay`, with `RuntimeWatchdogSec=30` in
@@ -790,8 +787,8 @@ all up** on a deployed box.
   remounting the rootfs read-only. `build-image.sh` now runs `fsck.ext4 -fn` and refuses to emit a
   corrupt image.
 - **`mmcblk` numbering is not stable** across images or boots. Identify the eMMC by its
-  `boot0`/`boot1` companions, never by a remembered number — the recovery snippets in
-  [board.md](board.md) do this now.
+  `boot0`/`boot1` companions, never by a remembered number — the recovery snippets in board.md do
+  this now.
 
 The R69's own contract is unchanged: it keeps every `r69-` name on disk, and the restructure was
 regression-tested by rebuilding its image and diffing all 33 payload files against a pre-refactor
@@ -801,7 +798,7 @@ build — functionally identical, differing only in comments and whitespace.
 
 The R69's device tree was the last thing still derived from the Radxa ROCK 2F. Rebasing it onto
 `stock/r69/board.dts` — the box's own Android tree — took the same six grafts the H96 Max needs, and
-nothing else (see [dtb.md](dtb.md)). What it fixed, all of it for free:
+nothing else (see dtb.md). What it fixed, all of it for free:
 
 - **CPU was overclocked 42%.** The ROCK 2F table offered OPPs to **2016 MHz** against this die's
   rated **1416 MHz**, and drove a `vdd-cpu` regulator on i2c1 that this board doesn't physically
@@ -847,10 +844,10 @@ invocation fails with `AuthenticationFailed`.
 ### 2026-08-09 — video codec bring-up: this board was already right
 
 Codec testing became a first-class check after the H96 Max turned out to have been unable to reach
-its VPU at all (that board's [worklog](../h96max/worklog.md) has the story). The R69 is the control
-case, and it needed **no device-tree work**: its factory root compatible already carries
-`rockchip,rk3528a`, which is exactly what `librockchip_mpp` substring-matches, so the library has
-always identified this SoC correctly here.
+its VPU at all (that board's worklog has the story). The R69 is the control case, and it needed **no
+device-tree work**: its factory root compatible already carries `rockchip,rk3528a`, which is exactly
+what `librockchip_mpp` substring-matches, so the library has always identified this SoC correctly
+here.
 
 What it did _not_ have is usable permissions. `/dev/mpp_service` (subsystem `mpp_class`), `/dev/rga`
 and all three `/dev/dma_heap/*` nodes are created **root-only `0600`**, so no unprivileged player
@@ -1128,8 +1125,8 @@ Two config consequences: `ROCKCHIP_CPUINFO` moves from `=m` to `=y`, because two
 probe is not a contract; and `WIFI_GENERATE_RANDOM_MAC_ADDR` is dropped, since it would win over the
 derivation and hand back the `02:…` random address instead.
 
-The lesson for the next board is in [AGENTS.md](../../AGENTS.md#derive-the-address-dont-store-it):
-prefer efuse, then the SoC OTP id, and only then a store that has to be written.
+The lesson for the next board is in AGENTS.md: prefer efuse, then the SoC OTP id, and only then a
+store that has to be written.
 
 **Same day, third pass — the randomness was ours, not the firmware's.** The derivation shipped and
 the address kept moving. Right kernel, matching `srcversion`, no DKMS copy, `rockchip-cpuinfo` at
@@ -1188,7 +1185,7 @@ tree.
   by 130 Rockchip boards in-tree. Our tree has **none**. It is the correct place to drop a rail.
 - **Poweroff has none.** The regulator bindings define suspend states only; there is no
   shutdown-state property. Cutting a rail at poweroff means a driver `.shutdown()` or a userspace
-  hook — the split across layers [AGENTS.md](../../AGENTS.md) forbids.
+  hook — the split across layers AGENTS.md forbids.
 
 Which lands on the honest recommendation: do not fight `virtual-poweroff` on a PMIC-less board.
 Prefer the state the hardware is good at. Open decision: whether to ship `HandlePowerKey=suspend`,
@@ -1281,8 +1278,7 @@ need a USB loader running, sent with `db`; bare maskrom only answers enumeration
 Worth noting what this corrected: the original recon entry claimed there was **no** reset button in
 the AV jack, which made maskrom look like it needed luck. There is one, it works, and the whole
 recovery chain — trigger, enumeration, host tool — is now verified rather than assumed. That is now
-a "Done means" criterion in [AGENTS.md](../../AGENTS.md#done-means): untested recovery is not
-recovery.
+a "Done means" criterion in AGENTS.md: untested recovery is not recovery.
 
 ### 2026-08-17 — the submission tree wired ethernet to the PHY, and the gate was built not to see it
 
@@ -1487,7 +1483,7 @@ not one, and we were on the lower.
 counting across a soft reboot, so `shutdown + boot` has to finish inside what is left of the window.
 On the sibling box that budget ran out: ramoops caught `watchdog: watchdog0: watchdog did not stop!`
 immediately before `reboot: Restarting system`, the next boot was reset at 15.91 s monotonic, and it
-stayed dark six hours until power was pulled. Not reproduced here — 🟢, same SoC and same block.
+stayed dark six hours until power was pulled. Not reproduced here — 🟡, same SoC and same block.
 
 Fixed the payload to `RuntimeWatchdogSec=80` and applied it to `cnc` in place (`install` the drop-in
 
@@ -1532,7 +1528,7 @@ carries TOPINIT, so enabling loads the full window instead of a hardware default
 whole window left for the rest of the resume and systemd's first ping. Proven at 44 s; the margin at
 89 s is strictly larger.
 
-🟢 **Whether it counts through sleep is still unproven.** `dw_wdt_suspend()` gates both
+🟡 **Whether it counts through sleep is still unproven.** `dw_wdt_suspend()` gates both
 `tclk_wdt_ns` and `pclk`, which should stop the counter, and that gating is load-bearing because
 userspace is frozen and systemd cannot ping. But 4.2 s is the longest suspend ever recorded with the
 watchdog armed, well under even the 44 s step. The 2m42s H96 Max suspend that looks like proof is
@@ -1558,7 +1554,7 @@ around 89 s into sleep; whether that surfaces as a reset _during_ sleep or as on
 wake path depends on whether the reset is masked while the SoC is in deep suspend. Only a sleep
 longer than the window produces either.
 
-Downgraded to 🟢 in `watchdog.md`, merged back into a single question with a three-outcome table
+Downgraded to 🟡 in `watchdog.md`, merged back into a single question with a three-outcome table
 that tells the two failure shapes apart.
 
 ### 2026-08-21, evening — settled: the watchdog is gated in sleep, and does not misfire on wake
@@ -1672,3 +1668,57 @@ The worklog never recorded which power source the 2026-08-14 proving run used, o
 power-on" and the `2207:350c` enumeration. The hardware answers it regardless. README now states the
 cable is not a power source and gives the order explicitly, so the step does not get "corrected"
 into something that cannot work.
+
+### 2026-09-05 — this board's U-Boot is now its own build
+
+> **Held back on 2026-09-06 — this board is still on the shared loader.** What follows is what was
+> built, not what ships. See the 2026-09-06 entry below.
+
+Family-wide change made during the H96 Max 3518D bring-up; `docs/uboot.md` has the detail and
+`docs/h96max-3518d/worklog.md` the reasoning. `firmware/r69/uboot.dts` → `firmware/r69/uboot.itb`
+was built and wired through `BOARD_UBOOT` in `board.conf`. The installed path also changed, from
+`u-boot.itb` to `uboot.itb` — that half did stick, and `rk35xx-update` drops the stale name.
+
+What it buys here: `CONFIG_ADC` + a correctly-named `saradc` node should make the recovery button
+drop U-Boot into Maskrom. The eMMC speed mode is unchanged — `rk3528-generic.dts` already used
+`mmc-hs200-1_8v`, which is right for this board; what is new is the factory DT's explicit
+`max-frequency = <50000000>` and `fixed-emmc-driver-type = <1>`, neither of which generic set. 🟡
+Untested on this box — the image was rebuilt and verified offline only, and **nothing was flashed
+here**.
+
+### 2026-09-06 — held on the shared loader
+
+The per-board U-Boot built yesterday is **not shipped on this board**. `BOARD_UBOOT` points back at
+`firmware/common/uboot.itb` — byte-identical (`c13ca928…`) to what this box boots today.
+
+Reason: it would have swapped a known-good, running bootloader for one that had never been booted on
+this hardware. The same class of change bricked the H96 Max 3518D twice during its bring-up — first
+a missing `dmc` node (`dram_init()` fails), then a missing `otp` node (`misc_init_r()` fails), both
+from dropping what `rk3528-u-boot.dtsi` had been supplying. That box has no SD slot and needed
+`ctrl+b` at the vendor SPL to come back.
+
+What stays: `firmware/r69/uboot.dts` and `uboot.patch` remain in the repo as the reviewed source,
+and `./build-uboot.sh r69` still builds it on demand. What changed is only which loader ships.
+`build-uboot.sh` with no arguments now builds just the boards whose `board.conf` names their own
+`uboot.itb`, so no unused FIT is produced.
+
+**To enable it here**: flash on the R69 first with serial attached, confirm it boots and that the
+recovery button reaches Maskrom, then set `BOARD_UBOOT=r69/uboot.itb` and the `payload.list` line.
+
+### 2026-09-12 — the hold is lifted, `mode-maskrom` added, FIT built on the host
+
+The 2026-09-06 entry no longer describes the repo. `BOARD_UBOOT=r69/uboot.itb`, and
+`firmware/common/uboot.itb` is deleted — no board can fall back to a shared loader, because there is
+none. What made the swap worth it was the recovery button, dead three ways over on the generic
+build; `docs/uboot.md` carries the detail.
+
+`board.patch` now declares `mode-maskrom = <0xef08a53c>` in the `syscon-reboot-mode` node, so
+`reboot maskrom` reaches Maskrom over SSH with no button and no serial. The value is not part of the
+`0x5242c3xx` REBOOT_FLAG family and nothing in U-Boot proper acts on it — the factory SPL reads it
+and hands back to the BootROM. Ours is discarded on every build, so no U-Boot SPL runs on this box
+at all.
+
+`uboot.itb` is rebuilt by the native macOS toolchain, replacing the container build. Only the
+`u-boot` image changed; the three ATF blobs and the device tree are byte-identical to what the
+container produced. ❓ Neither the FIT nor `mode-maskrom` has been booted here — both were verified
+on the H96 Max, and this box was offline for the change.

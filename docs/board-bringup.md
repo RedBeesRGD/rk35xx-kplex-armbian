@@ -84,7 +84,7 @@ only these grafts, each with a functional consumer:
 | Graft                                               | Consumer                                                          |
 | --------------------------------------------------- | ----------------------------------------------------------------- |
 | debug uart `status` → `okay` + its `xfer` pinctrl   | `ttyS0` console                                                   |
-| `fiq-debugger` → `disabled`                         | frees that UART for `ttyS0`                                       |
+| `fiq-debugger` → `disabled`                         | 🟡 questionable; stock runs `ttyFIQ0` on it fine                  |
 | IR `remote_support_psci` → `1`                      | remote wakes the box from off                                     |
 | GPU → lima `clocks`/`clock-names`/`interrupt-names` | Armbian uses mainline lima                                        |
 | LEDs → labels `power`/`standby`, `retain-state-*`   | the shared LED hooks                                              |
@@ -145,7 +145,7 @@ table and support matrix.
 Cheaper here than on the box. Attach the built image and check:
 
 - **Loaders byte-identical** to `firmware/<board>/factory_idbloader.bin` (sector 64) and
-  `firmware/common/u-boot.itb` (16384) — `dd` + `md5`.
+  `firmware/<board>/uboot.itb` (16384) — `dd` + `md5`.
 - **DTB** matches `firmware/<board>/board.dtb`; `armbianEnv.txt` has `fdtfile` + the `ttyS0` args.
 - **Identity dir** populated: `board-id`, `board-name`, `board.dtb`, both loaders.
 - **No other board's names leaked** — grep `/usr/local/sbin`, `/etc/kernel/postinst.d`,

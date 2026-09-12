@@ -1,8 +1,9 @@
 # Board validation — criteria of done
 
-The gate a board passes before it ships. Every line gets **✅ verified · ❌ broken · ➖ not on this
-box**, numbers and reasons in `docs/<board>/board.md`. Blank is not an answer; nothing is inherited
-from a sibling board.
+The gate a board passes before it ships. Every line gets **✅ verified · 🟡 likely (proven on a
+sibling, or a cheap check settles it) · ❓ never tested · ❌ broken · ➖ not on this box**, numbers
+and reasons in `docs/<board>/board.md`. Blank is not an answer; nothing is inherited from a sibling
+board.
 
 Run every unattended check before asking the human for anything, then hand them one batched list.
 Risk order: SDIO Wi-Fi, the Ethernet PHY, the video codec, anything the DTB touched.
@@ -35,8 +36,9 @@ payload and an upstreamed board skips it.
 - [ ] `PM: suspend entry (deep)` in dmesg, and `deep` bracketed in `/sys/power/mem_sleep`
 - [ ] Suspend, resume on the remote, and it **stays** up — no logind double-fire
 - [ ] Suspend for **longer than the watchdog window** and resume: same `boot_id`, not a cold boot
-- [ ] Same with the remote in BLE mode: it reconnects after resume and still drives the box. Waking
-      is always the IR path, because Bluetooth is dead in suspend and in off
+- [ ] Same with the remote in BLE mode: it reconnects after resume and still drives the box, and
+      **wakes it** — BLE wake needs the BT driver to set `hdev->wakeup`, or the controller is torn
+      down at suspend and only IR can wake the box
 - [ ] Cold-boot time from off, timed
 - [ ] RTC present and keeping time, or its absence recorded
 
@@ -46,7 +48,7 @@ payload and an upstreamed board skips it.
 - [ ] SD: enumerates, hotplug insert **and** remove, `fio` recorded
 - [ ] Boots from eMMC on its own loader pair — `dd` sectors 64 and 16384
 - [ ] After migration, sectors 7168–16383 are byte-identical to the backup; only the GPT, the
-      idbloader and `u-boot.itb` differ
+      idbloader and `uboot.itb` differ
 - [ ] `DVKR` at sector 7168 and `SSKR` at 8192 still tagged; `LAN_MAC` still the sticker address
 - [ ] Maskrom proven **before** it is needed — recovery button at power-on, `rkdeveloptool ld`
       reports `Maskrom`. **Entry is not recovery**: `db`, `rl` and a verified `wl` are a separate
@@ -93,13 +95,34 @@ payload and an upstreamed board skips it.
 ## Display
 
 - [ ] Picture on a real TV at native resolution; `modetest -c` mode list sane, EDID parses
-- [ ] 1080p60 and 4K60 both drive the panel
+- [ ] Switch modes with `modetest -M rockchip -s <conn>:<WxH>-<hz>` rather than rebooting — it is
+      all runtime. Keep its stdin open (`sleep 60 | modetest …`) or it exits at once and the mode
+      reverts before you can look
+- [ ] **Every resolution class drives the panel: 1080p, 1440p/2K and 4K** — test all three, they
+      fail independently. A width-limited line buffer looks fine at 1080p and fills the right of the
+      screen with garbage at 4K, and refresh rate does not change it (4K30 fails exactly like 4K60,
+      because the limit is width, not bandwidth). The damage scales with width: a 3840 panel lost
+      ~half, a 2256 monitor ~30%
+- [ ] If a resolution is broken, check `esmart_lb_mode` on the VOP node before anything else — the
+      factory value `03` is `VOP3_ESMART_2K_2K_2K_2K_MODE` (every window 2K) and must be `02`
+      (`VOP3_ESMART_4K_2K_2K_MODE`) for the primary plane to reach 4K
 - [ ] A PC monitor too — the pixel-clock quirk bites there, not on TVs
 - [ ] HDMI audio (`aplay -D hdmi:…`), and it is the default sink
 - [ ] CEC: `cec-ctl` finds the adapter, the TV remote reaches the box, `cec-client` sees traffic
 - [ ] HDMI hotplug re-detects, with no blank screen afterwards
 - [ ] AV jack: composite video **and** analog audio
-- [ ] GPU renders under `kmscube` / `glmark2-es2`, fps recorded
+- [ ] GPU renders, fps recorded — **this one needs no screen**, see below
+- [ ] GPU renders **on screen** — use `kmscube`. It honours the connector's `preferred` mode and
+      renders correctly at 4K
+
+**The GPU check does not need a display.** Debian's `glmark2-es2` is the X11 build and `kmscube`
+needs a connected connector, which would strand the whole row behind a TV. EGL on the GBM platform
+plus `EGL_KHR_surfaceless_context` renders to an FBO on the render node instead — `glReadPixels` on
+a known triangle is the pass/fail, and timing the loop gives the fill rate. Two traps: choose the
+config **without** `EGL_SURFACE_TYPE`, since GBM exposes window configs and asking for
+`EGL_PBUFFER_BIT` fails; and the user needs the `render` group. Record `GL_MAX_TEXTURE_SIZE` while
+you are there — on Mali-450 it is 4096, which caps what the GPU can do with 8K the VPU decodes
+happily.
 
 ## Video codec
 
@@ -119,28 +142,61 @@ Test every cell at **720p, 1080p, 4K and 8K** — both surprises this repo found
 
 ## USB
 
+- [ ] `lsusb -t` speeds read **before** benchmarking — a USB 2.0 hub caps everything behind it
+- [ ] USB 3 judged by the BOS `SuperSpeed USB Device Capability`, not `bcdUSB` (a fallen-back USB 3
+      device reports `2.10`), and with the device plugged straight into the socket
 - [ ] USB 2: enumerates at `480M`, throughput recorded
 - [ ] USB 3: negotiates `5000M`, `uas` bound not BOT, `fio` sequential + random 4K
 - [ ] Every port individually — they are not interchangeable
 - [ ] Hotplug in and out on each, no dmesg complaints
-- [ ] Bus power: a self-spinning 2.5" HDD starts, or the limit recorded
 
 ## IR, buttons, LEDs
 
 - [ ] IR receiver: an input node exists, and its IRQ in `/proc/interrupts` counts up while the
       remote is pressed
-- [ ] Every remote button captured with `evtest`; keymap table in `board.md`
 - [ ] IR-extender jack, if the board has one
 - [ ] Power on the remote cold-boots the box from off
 - [ ] Long press tested in the mode the remote is actually in — IR or BLE
 - [ ] Toothpick/recovery button registers on the `adc-keys` node
 - [ ] LED polarity confirmed by eye: running, suspended, off
 
+## Remote keymap — run this once per transport
+
+IR and BLE are two independent keymaps in one handset: IR is looked up in the `ir_keyN` table we
+ship in `board.dts`, BLE is whatever HID usages the handset transmits. Neither predicts the other,
+so passing one proves nothing about the other. `docs/remote-keymap.md` has the procedure and the
+`hwdb` override.
+
+Per transport, with `evtest` on `/dev/input/ir-remote` and on `/dev/input/bt-remote`:
+
+- [ ] Every button produces an event, and its `MSC_SCAN` scancode is recorded alongside the keycode
+- [ ] No button reports `KEY_UNKNOWN`
+- [ ] No two buttons share a keycode
+- [ ] The keycode matches the printed label — `KEY_MENU` on a ⌫ key is a fault, not a quirk
+- [ ] Where the board has both transports, the two agree button for button
+- [ ] The table, scancodes included, is recorded in `board.md`
+- [ ] Any override shipped, compiled with `systemd-hwdb update`, and the keycode re-read off the
+      handset — a passing `systemd-hwdb query` only proves the match, not the remap
+
+## Device tree
+
+- [ ] No node claims hardware the board lacks. A factory tree is a reference design: every
+      `status = "okay"` is **its** claim, not this PCB's
+- [ ] Each ghost disabled, its `board.patch` hunk marked **`NOT FITTED -`** with the evidence, so a
+      reader can tell a correction from a change we chose
+- [ ] Every other hunk carries its own rationale — upstream, `NOT FITTED` describes the board and
+      the rest describes our stack
+- [ ] `upstream/build.sh` reports `VERIFIED: native tree is content-identical to the patched tree`
+- [ ] After any tree change, re-check the nodes you did **not** touch are still `okay` — eMMC first
+
 ## Overlay mode only
 
 Skip on an upstreamed board — it takes kernel, DTB and identity from Armbian's own packages and
 never reads `firmware/` or `/usr/local/share/*/`.
 
+- [ ] Every installed file is `root:root` —
+      `find / -xdev \( -uid <build-uid> -o -gid <build-gid> \)` returns nothing. e2tools copy the
+      build host's ownership straight into the image
 - [ ] Identity dir populated and correct: `board-id`, `board-name`, `board.dtb`, both loaders
 - [ ] No other board's names under `/etc`, `/usr/local`, `/usr/lib/systemd`, `/usr/src`
 - [ ] Loaders on disk match the identity dir — `dd` sectors 64 and 16384, md5 against
@@ -151,21 +207,14 @@ never reads `firmware/` or `/usr/local/share/*/`.
 - [ ] The dtb-persist hook survives a kernel update — `/boot/dtb-*/rockchip/board.dtb` still matches
       `/usr/local/share/*/board.dtb`
 
-## Needs the human — batch these into one list
+## Needs the human — batch these into one trip
 
-- LED polarity: running, suspended, off
-- Every remote button under `evtest`, for the keymap table
-- Wake from off on the remote
-- Suspend and resume, in IR mode and in BLE mode
-- Toothpick/recovery button
-- HDMI on a real TV, and on a PC monitor
-- A real 4K HEVC file playing
-- A device in each USB port
-- SD card insert and remove
-- AV jack
-- Power meter at idle / suspended / off, bare board
-- BT remote pairing
-- eMMC migration, and the device name it asks to confirm
+LED polarity (running, suspended, off) · every remote button under `evtest`, **once per transport**
+· wake from off on the remote · suspend and resume, in IR mode **and** BLE mode · the
+toothpick/recovery button, and on a slotless board that it reaches Maskrom **on our U-Boot** · HDMI
+on a real TV and on a PC monitor · a real 4K HEVC file playing · a device in each USB port · SD
+insert and remove · AV jack · power meter at idle / suspended / off, bare board · BT remote pairing
+· eMMC migration, and the device name it asks to confirm.
 
 ---
 
@@ -196,10 +245,16 @@ never reads `firmware/` or `/usr/local/share/*/`.
   seconds between phases — it throttles thermally, and a read taken straight after heavy writes
   under-reported by ~12%.
 
-- `glmark2-es2-drm` needs a VT and an **unoccupied** display. Over SSH it prints
+- **`glmark2-es2-drm` is the wrong tool on a 4K TV — use `kmscube`.** It picks the largest-area mode
+  and ignores `DRM_MODE_TYPE_PREFERRED`, so on a TV advertising DCI 4K it renders a healthy frame
+  rate onto a black screen. It cannot be steered. `docs/hdmi-edid-override.md` has the reasoning and
+  the way to get comparable numbers anyway.
+- `glmark2-es2-drm` also needs a VT and an **unoccupied** display. Over SSH it prints
   `Failed to become DRM master`, and so does `openvt` while an earlier run still holds
   `/dev/dri/card0` — that leftover is the usual cause, not permissions. `fuser -v /dev/dri/card0`,
   `pkill -9 -f glmark2`, then `openvt -s -w -- sh -c 'glmark2-es2-drm > /tmp/gl.log 2>&1'`.
+- Anything driving the screen from a unit needs its **stdin held open** — `sleep 60 | kmscube` — or
+  it reads EOF, exits immediately, and the mode reverts before you can look at it.
 - Codec tests run as a **normal user** — the nodes ship `0600` and root hides a missing udev rule.
   Record fps: a silent fall back to software is the failure the matrix exists to catch.
 - **A warm reboot is not a cold one, and one of them is not a test.** On this family a `dwmmc`
@@ -210,6 +265,21 @@ never reads `firmware/` or `/usr/local/share/*/`.
 - A boot that has grown since the last measurement is the cheapest signal something is wrong. Usual
   causes: a unit waiting on absent hardware, a getty retrying a tty, a first-boot script that never
   marked itself done, DHCP on an unplugged interface, a DKMS rebuild meant to happen once.
+
+## Proving something is absent
+
+- **"Nothing enumerated" is not evidence of absence**, and neither is an empty command. Disabling a
+  node needs a _positive_ signal: a driver error (`gmac0`: `phy_poll_reset failed: -110`), a probe
+  reading nothing (`sfc`: `unrecognized JEDEC id bytes: 00, 00, 00`), or vendor docs that omit the
+  feature. Without one, silence is equally explained by a cable, an adapter, or a tool that is not
+  installed — empty `iw`/`hciconfig` output read as broken hardware here, and `iw` lives in `/sbin`,
+  off a non-login ssh `PATH`.
+- **A silent input device is ambiguous.** The IR driver registers whether or not a receiver is
+  soldered, and is silent both when there is none and when the remote matches no DT usercode table.
+  Drive a _known-good_ receiver with the same handset to separate the two.
+- **A capability measured before a boot stage was replaced says nothing about the box after.**
+  Maskrom was ✅ via `Loader` → `rd 3`, which existed only because the **factory** U-Boot served
+  rockusb. Ours does not, so it went back to 🟡.
 
 ## Network under load
 
@@ -222,10 +292,9 @@ never reads `firmware/` or `/usr/local/share/*/`.
 - Check where the interrupts land before reaching for anything else —
   `grep -E "mmc|sdio|eth|gmac|dwmac" /proc/interrupts`. Remedies, cheapest first: pin the IRQ
   (`/proc/irq/<n>/smp_affinity`), spread receive processing
-  (`/sys/class/net/<if>/queues/rx-0/rps_cpus`), then raise the driver's own bus threads — the
-  AIC8800 exposes `bustx_thread_prio` and `busrx_thread_prio` under
-  `/sys/module/aic8800_fdrv/parameters/`. Any of them is board data and ships in the payload with
-  the measurement that justified it.
+  (`/sys/class/net/<if>/queues/rx-0/rps_cpus`), then raise the driver's own bus-thread priorities if
+  it exposes them. Any of these is board data and ships in the payload with the measurement that
+  justified it.
 
 ## MAC addresses
 
@@ -243,14 +312,6 @@ never reads `firmware/` or `/usr/local/share/*/`.
   nor `88:00:33` is a registered OUI, so deriving under them squats on space that is not ours;
   `rk35xx-mac-pin` sets the bit whatever `mac-oui` says. Addresses read from vendor storage are
   assigned and stay untouched.
-- `CONFIG_WIFI_GENERATE_RANDOM_MAC_ADDR` generates an address once and persists it with
-  `rk_vendor_write()`; if that write fails — an uninitialised or read-only vendor storage partition
-  will do it — the driver silently generates a fresh one every boot.
-- Before blaming that write, check the driver reaches the code at all. The symbol only gates
-  `get_wifi_addr_vendor()` in `net/rfkill/rfkill-wlan.c`, which a Wi-Fi driver must opt into by
-  calling `rockchip_wifi_mac_addr()`. Vendored SDIO drivers routinely hide that behind their own
-  `CONFIG_PLATFORM_*` knobs and then ask the firmware, which invents one per boot.
-  `grep -c rfkill-wlan` over a boot log settles it: zero means vendor storage is not the problem.
 - Bluetooth has the same requirement and a worse failure — a wandering `BD_ADDR` invalidates every
   pairing on every boot, and nothing in the logs says why.
 

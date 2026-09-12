@@ -8,7 +8,7 @@ Retail name "H96 Max H313" — the H313 is branding, the silicon is RK3518.
 
 |               |                                                                                                                                                              |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Name          | **H96 Max** (LEFFOT; listed as "H96 Max H313"). Case plate: `RAM 2GB · ROM 16GB · Input 5V⎓2A`                                                               |
+| Name          | **H96 Max H313** — the model name on the back of the case (LEFFOT). Case plate: `RAM 2GB · ROM 16GB · Input 5V⎓2A`                                           |
 | Board         | silkscreen **`3518_ZX_V01 20250818`** — combined RAM+eMMC module, on-PCB Wi-Fi/BT antennas                                                                   |
 | SoC           | **RK3518** — `SoC: 35181001` (same ID as the R69)                                                                                                            |
 | Label MAC     | **`00:EF:00:4A:43:A6`** ✅ — matches the case label, and held in eMMC vendor storage as `LAN_MAC` (live copy v74); serial `YT26050805378`                    |
@@ -20,9 +20,9 @@ Retail name "H96 Max H313" — the H313 is branding, the silicon is RK3518.
 
 Unlike the R69, all 2 GB of RAM is usable here.
 
-**Wake-on-LAN 🟢 impossible here too, untested on this board.** Same integrated FEPHY as the R69
+**Wake-on-LAN 🟡 impossible here too, untested on this board.** Same integrated FEPHY as the R69
 (`ethernet-phy-id0044.1400`, `phy-is-integrated`, no `phy-supply`), and WoL needs the PHY awake
-while the MAC sleeps. Proven dead on the R69; 🟢 not ✅ because verification is per-board.
+while the MAC sleeps. Proven dead on the R69; 🟡 not ✅ because verification is per-board.
 
 ## Measured on our unit
 
@@ -158,7 +158,12 @@ If the `Bluetooth remote` name doesn't show, these narrow it down:
 
 While BLE-connected the remote stops transmitting IR, so buttons never double-fire; it falls back to
 IR when unpaired, which is why the power button still wakes the box from "off". BLE keycodes differ
-from the IR ones (OK is `KEY_SELECT`, home `KEY_HOMEPAGE`), so a keybinding should handle both.
+from the IR ones (home is `KEY_HOMEPAGE`, not `KEY_HOME`), so a keybinding should handle both.
+
+The H96 Max 3518D ships a `hwdb` scancode remap for a remote reporting the same `2B54:1600`. ❓ **It
+is deliberately not installed here.** A shared USB id is not a shared button layout, and this
+remote's scancodes have never been captured — applying that map blind could mis-key every button.
+Capture them first; `docs/remote-keymap.md` has the procedure.
 
 The **voice mic** is out of scope, not broken: the BLE link is up and the button reports
 `KEY_SEARCH`, but the audio rides the proprietary Android-TV voice GATT service (`0xfeb3`) rather

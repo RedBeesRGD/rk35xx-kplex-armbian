@@ -40,9 +40,34 @@ upgrade reinstates it.
 runs `rk35xx-boardname`, which restores it from `/usr/local/share/rk35xx/board-name`. `BOARD` itself
 stays `rock-2f` — that is what the base image is, and changing it would break Armbian's own scripts.
 
-The `linux-u-boot-*` package is **held** from first boot — `linux-u-boot-rock-2f-vendor` on both
-boxes. Its postinst flashes ROCK 2F loaders, which this DRAM cannot run, so removing the hold
-soft-bricks the box on the next upgrade.
+The `linux-u-boot-*` package is **held** from first boot — `linux-u-boot-rock-2f-vendor` on every
+box here, which all run the same `rock-2f` base. Its postinst flashes ROCK 2F loaders, which this
+DRAM cannot run, so removing the hold soft-bricks the box on the next upgrade.
+
+## `/tmp` is a tmpfs, and `armbian-firmware` does not fit in it
+
+A `full-upgrade` that pulls `armbian-firmware` can die part-way with the rootfs almost empty:
+
+```
+E: Write error - ~LZMAFILE (28: No space left on device)
+E: Sub-process /usr/bin/dpkg returned an error code (1)
+```
+
+`df /` is misleading here — on the 3518D it read **11 G free** at the moment of failure. Armbian
+mounts `/tmp` as a tmpfs sized from RAM (984 MB on a 2 GB box), and that is what fills while apt
+decompresses. The kernel package is then left half-configured (`dpkg -l` shows `iF`).
+
+Recover, and avoid it next time, by putting apt's scratch on real disk:
+
+```sh
+sudo mkdir -p /var/tmp/aptwork
+sudo TMPDIR=/var/tmp/aptwork dpkg --configure -a          # finish the half-configured package
+sudo TMPDIR=/var/tmp/aptwork apt-get -y full-upgrade
+```
+
+**A half-configured kernel package is not automatically a broken boot** — check before rebooting. On
+the 3518D `/boot` still held a complete set for the running kernel, `Image`/`uInitrd`/`dtb` symlinks
+all resolved, and the box rebooted cleanly once `dpkg --configure -a` finished.
 
 ## After an upgrade
 

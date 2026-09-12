@@ -1,8 +1,9 @@
 # HDMI on RK3528: unclockable modes and slow EDID probes
 
 Two independent defects, found on the R69 (2026-08-14) with a BOE 2256x1504 panel. Neither is board
-data — `hdmi@ff8d0000` and `hdmiphy@ffe00000` are identical in `rk3528.dtsi` and both boards' DTS,
-so **the H96 Max has both**; it just needs a display with a non-standard mode to show the first.
+data — `hdmi@ff8d0000` and `hdmiphy@ffe00000` are identical in `rk3528.dtsi` and every board's DTS
+here, so **every board has both**; it just needs a display with a non-standard mode to show the
+first.
 
 Measured on the box, not read out of the source.
 
@@ -16,9 +17,9 @@ the pixel clock matches an entry **exactly**. The table holds 22 rates — the s
 108 119 148.352 148.5 162 165 296.703 297 593.407 594   (MHz)
 ```
 
-Neither DTS supplies `rockchip,phy-table`, so both boards use that default. 2256x1504p60 needs 235.7
-MHz and is not in it — nor are 1920x1200p60 RB (154) or 1600x900p60 RB (97.75), both of which this
-panel also advertises.
+No DTS here supplies `rockchip,phy-table`, so every board uses that default. 2256x1504p60 needs
+235.7 MHz and is not in it — nor are 1920x1200p60 RB (154) or 1600x900p60 RB (97.75), both of which
+this panel also advertises.
 
 Nothing prunes them, because **both** filters miss:
 
@@ -82,8 +83,8 @@ ten timeouts exhaust `retry = 100` and print `ddc read failed` — 10 × ~103 ms
 s. Five of them is the ~5.2 s.
 
 Not the bus and not board data: `ddc-i2c-scl-high-time-ns = <9625>` / `-low-time-ns = <10000>` (≈51
-kHz) are identical in `rk3528.dtsi` and both boards' DTS, the HDMI IRQ counts up throughout (151 →
-219 across one failing probe), and `/sys/class/drm/card0-HDMI-A-1/edid` returns all 256 bytes
+kHz) are identical in `rk3528.dtsi` and every board's DTS here, the HDMI IRQ counts up throughout
+(151 → 219 across one failing probe), and `/sys/class/drm/card0-HDMI-A-1/edid` returns all 256 bytes
 afterwards. Forcing a supported mode does **not** help — with `video=HDMI-A-1:1920x1080@60` the
 clock is correct and there are still exactly 5 failures and the same boot time.
 
@@ -103,3 +104,16 @@ dmesg | grep -cE 'ddc read failed|ddc read time out'
 sudo modetest -M rockchip -p | head
 sudo grep -E 'clk_hdmiphy_pixel_io|dclk_vop0' /sys/kernel/debug/clk/clk_summary
 ```
+
+## The `esmart_lb_mode` graft is unverified on two of the three boards
+
+`esmart_lb_mode = [02]` (`VOP3_ESMART_4K_2K_2K_MODE`, giving Esmart0 a 4K line buffer) replaced the
+factory `[03]` in **all three** `board.dts` files, because the factory value caps every Esmart
+window at a 2K line buffer and corrupts the right-hand third of a 4K frame.
+
+- ✅ **H96 Max 3518D** — verified on a 4K TV and on a 2256x1504 monitor, 2026-09-07.
+- 🟡 **R69** and **H96 Max** — the graft ships, nobody has put a 4K display on either.
+
+Same SoC family and the same VOP2 block, so it should behave identically — but that earns 🟡, not
+✅. Plug a 4K display into each, confirm `3840x2160p60` full-screen with no colour fringe on the
+right, and check a 1080p display still comes up clean.

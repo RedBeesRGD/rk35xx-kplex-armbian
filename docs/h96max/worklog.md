@@ -1,13 +1,13 @@
 # Armbian on the H96 Max (the "H313" one) — bring-up worklog
 
-The second box to get the [R69 treatment](../r69/worklog.md): the LEFFOT **H96 Max H313** TV box —
-board name **H96 Max**; despite the "H313" in the retail name, the silicon is another **RK3518**.
-Same method, new board: keep the factory idbloader, reuse our u-boot, re-derive the device tree from
-the box's own dumps.
+The second box to get the R69 treatment: the LEFFOT **H96 Max H313** TV box — board name **H96
+Max**; despite the "H313" in the retail name, the silicon is another **RK3518**. Same method, new
+board: keep the factory idbloader, reuse our u-boot, re-derive the device tree from the box's own
+dumps.
 
 This file is the **running worklog** — entries in the order they happen, same spirit as
-[../r69/worklog.md](../r69/worklog.md) but written _while_ it happens, not after. When the port is
-done, this is the raw material for the polished writeup.
+`docs/r69/worklog.md` but written _while_ it happens, not after. When the port is done, this is the
+raw material for the polished writeup.
 
 ---
 
@@ -32,8 +32,8 @@ done, this is the raw material for the polished writeup.
 ## Bring-up checklist
 
 Every component the board has, with the test that would have caught the matching R69 failure (see
-the [trap table](../r69/worklog.md#troubleshooting-reference-the-rk3518-traps)). "Works on the desk"
-is not a pass — several R69 failures only showed under load, on specific media, or across reboots.
+the trap table). "Works on the desk" is not a pass — several R69 failures only showed under load, on
+specific media, or across reboots.
 
 **Boot chain & core**
 
@@ -273,7 +273,7 @@ up). No shell interaction yet; everything below is read straight out of that cap
   a DKMS module like the IR/PHY drivers — finding a buildable, licensable source for the SWT6621S
   stack is the open problem of this port.
 
-**Next steps** (the [HOW-IT-WAS-DONE §"another RK3518 box"](../r69/worklog.md) sequence):
+**Next steps** (the HOW-IT-WAS-DONE §"another RK3518 box" sequence):
 
 1. Get a **root shell on serial** (unverified that Android 14 still runs a console service — SELinux
    is permissive, which is promising) and bootstrap ADB over the network.
@@ -1461,7 +1461,7 @@ and prose all live under the same name:
 
 References were updated repo-wide (`README.md`, `build-image.sh`'s `docs/<board>/dtb.md` pointer,
 `build-uboot.sh`, `TODO.md`, `firmware/r69/r69-mac-pin`, and the docs' own cross-links, which are
-now relative — `../r69/worklog.md` from the H96 side). Swept up on the way: two `.md`
+now relative — `docs/r69/worklog.md` from the H96 side). Swept up on the way: two `.md`
 double-suffixes left by a rename pass, one historical line mangled into "`r69-worklog.md` →
 `r69-worklog.md`" (it was always `HOW-IT-WAS-DONE.md` → the R69 worklog), and stale `stock/h96/` +
 `firmware/h96/` paths that predated the `h96max` naming decision.
@@ -1711,7 +1711,7 @@ Same caps word as the R69. **This board could not do hardware video at all befor
 the entire matrix now runs on it — as `art`, not root, which is the udev rule doing its job. Decode
 to 8K on H.264 / HEVC / MJPEG, VP9 at 634 / 327 / 85 fps, and HEVC encode at 4K (15.9) and 8K (4.0)
 despite MPP's table claiming a 1080p ceiling. With our patch, H.264 encodes at 115 / 55 / 14.4 / 3.6
-fps and `ffprobe` confirms genuine `h264,7680,4320`. Numbers in [board.md](board.md#hardware-video).
+fps and `ffprobe` confirms genuine `h264,7680,4320`. Numbers in board.md.
 
 Byte-for-byte, the encoder output on both boards is **identical** at every resolution (e.g. 663,470
 bytes for 1080p HEVC) — same silicon, deterministic encoder, and a neat cross-check that neither box
@@ -1735,10 +1735,8 @@ trust that over reasoning about the file.
 up, `wait scan card time out` count zero. The module on the box is byte-identical to the patched
 build (`swt6621s_wifi.ko` md5 `fb31b232…`), so the result is about this patch and nothing else.
 
-**Correction to
-[the 2026-08-07 entry](#2026-08-07--pinning-removed-for-good-two-reboot-observation--oui-registry-check):
-`wlan0`'s address is not chip-fused.** `skw_setup_mac_address()` (`skw_core.c`) tries three sources
-and this box lands on the third:
+**Correction to the 2026-08-07 entry: `wlan0`'s address is not chip-fused.**
+`skw_setup_mac_address()` (`skw_core.c`) tries three sources and this box lands on the third:
 
 ```c
 if (user_mac && is_valid_ether_addr(user_mac))          /* skw_mac module param */
@@ -1747,10 +1745,10 @@ else { eth_random_addr(addr); addr[0]=0xFE; addr[1]=0xFD; addr[2]=0xFC; }
 ```
 
 `FE:FD:FC` is a **driver constant marking the fallback**, not an OUI, and the remaining three octets
-come from `eth_random_addr()`. This is not the `CONFIG_PLATFORM_*` trap [AGENTS.md](../../AGENTS.md)
-warns about — the driver's own Makefile does `ccflags-y += -DCONFIG_PLATFORM_ROCKCHIP`, so
-`rockchip_wifi_mac_addr()` is compiled in and did run; it simply returned nothing valid, and the
-firmware's `chip.mac` was invalid too.
+come from `eth_random_addr()`. This is not the `CONFIG_PLATFORM_*` trap AGENTS.md warns about — the
+driver's own Makefile does `ccflags-y += -DCONFIG_PLATFORM_ROCKCHIP`, so `rockchip_wifi_mac_addr()`
+is compiled in and did run; it simply returned nothing valid, and the firmware's `chip.mac` was
+invalid too.
 
 The **observation** still holds: `fe:fd:fc:99:08:5f` was identical on two boots seven reboots apart
 today, as it was across two boots on 2026-08-07. So the payload's no-pinning decision stands. But it
@@ -1911,7 +1909,7 @@ Wiring: `firmware/h96max/seekwave-swt6621s/` holds the patches, mirroring the IR
 board's `board_stage_dkms` and nothing else.
 
 Both dry-ran and then applied clean against the pinned `b1b15016`; `skw_txba_stale_sec = 10` and the
-four `force`-flag sites are present in the fetched tree, `dkms.conf` untouched. 🟢 Neither is
+four `force`-flag sites are present in the fetched tree, `dkms.conf` untouched. 🟡 Neither is
 confirmed on a built image yet — next h96max build should show an idle box no longer accumulating
 `short skb`, and the latch reproducer recovering on its own.
 
@@ -1991,3 +1989,65 @@ socket to the host — `nc` is not on the box). 78 Mbit/s cannot happen on a 6 M
 field is stale, not live; `data: 0` beside it says the same. It refreshes only when the driver polls
 `GET_STA`. `wifi-tx-latch.md` had called that node "better" than `iw` — corrected to say a `legacy`
 reading is a prompt to measure, never proof.
+
+### 2026-09-05 — this board's U-Boot is now its own build
+
+> **Held back on 2026-09-06 — this board is still on the shared loader.** What follows is what was
+> built, not what ships. See the 2026-09-06 entry below.
+
+Family-wide change made during the H96 Max 3518D bring-up; `docs/uboot.md` has the detail and
+`docs/h96max-3518d/worklog.md` the reasoning. `firmware/h96max/uboot.dts` →
+`firmware/h96max/uboot.itb` was built and wired through `BOARD_UBOOT` in `board.conf`. The installed
+path also changed, from `u-boot.itb` to `uboot.itb` — that half did stick, and `rk35xx-update` drops
+the stale name.
+
+Two things it buys here: the eMMC timing now comes from this box's own factory U-Boot DT rather than
+`rk3528-generic.dts`, and `CONFIG_ADC` + a correctly-named `saradc` node should make the recovery
+button drop U-Boot into Maskrom. 🟡 Neither is tested on this box — the image was rebuilt and
+verified offline only, and **nothing was flashed here**.
+
+### 2026-09-06 — held on the shared loader
+
+The per-board U-Boot built yesterday is **not shipped on this board**. `BOARD_UBOOT` points back at
+`firmware/common/uboot.itb` — byte-identical (`c13ca928…`) to what this box boots today.
+
+Reason: it would have swapped a known-good, running bootloader for one that had never been booted on
+this hardware. The same class of change bricked the H96 Max 3518D twice during its bring-up — first
+a missing `dmc` node (`dram_init()` fails), then a missing `otp` node (`misc_init_r()` fails), both
+from dropping what `rk3528-u-boot.dtsi` had been supplying. That box has no SD slot and needed
+`ctrl+b` at the vendor SPL to come back.
+
+What stays: `firmware/h96max/uboot.dts` and `uboot.patch` remain in the repo as the reviewed source,
+and `./build-uboot.sh h96max` still builds it on demand. What changed is only which loader ships.
+`build-uboot.sh` with no arguments now builds just the boards whose `board.conf` names their own
+`uboot.itb`, so no unused FIT is produced.
+
+**To enable it here**: flash on the R69 first with serial attached, confirm it boots and that the
+recovery button reaches Maskrom, then set `BOARD_UBOOT=h96max/uboot.itb` and the `payload.list`
+line.
+
+### 2026-09-12 — the hold is lifted, `mode-maskrom` added, FIT built on the host
+
+The 2026-09-06 entry no longer describes the repo. `BOARD_UBOOT=h96max/uboot.itb`, and
+`firmware/common/uboot.itb` is deleted — there is no shared loader left to fall back to.
+
+`board.patch` now declares `mode-maskrom = <0xef08a53c>` in the `syscon-reboot-mode` node. ✅ Live
+here: `/proc/device-tree/syscon@ff300000/reboot-mode/mode-maskrom` reads `ef 08 a5 3c`, `offset`
+`0x70200` (= `0xff370200`). The factory SPL does the handoff — `CONFIG_ROCKCHIP_BROM_HELPER` is
+unset in our build and the SPL it produces is discarded, so no U-Boot SPL runs here.
+
+`uboot.itb` is rebuilt by the native macOS toolchain. ✅ Booted twice from the SD at sector 16384.
+Measured against the container build on the same box, writing each and rebooting:
+
+|                    | native (`aarch64-elf-gcc` 16.2) | container (bookworm gcc 12) |
+| ------------------ | ------------------------------- | --------------------------- |
+| dark phase         | 27 s                            | 35 s                        |
+| total to SSH       | 46 s                            | 53 s                        |
+| kernel + userspace | 15.99 s                         | 15.96 s                     |
+
+Only the `u-boot` image differs (608520 vs 614344 bytes); `atf-1/2/3` and `fdt-1` are
+byte-identical. An earlier "96 s" reading was mDNS name resolution going stale across the reboot,
+not the box.
+
+**Open gap:** `/usr/local/share/rk35xx/board.dtb` here predates `mode-maskrom`, so the dtb-persist
+hook would reinstate a tree without it on the next kernel update. A deploy closes it.

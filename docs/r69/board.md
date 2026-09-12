@@ -184,7 +184,10 @@ line of sight; driving a running box does not.
 **BLE pairing ✅.** Hold **left + right** until the LED blinks. Bonds as **`Bluetooth remote`**,
 reports battery (97% here), creates `Bluetooth remote Consumer Control`, `Bluetooth remote Mouse`
 and a vendor node. BLE keycodes are **not** the IR ones above. Same BLE HID model as the H96 Max's
-remote (`usb:v2B54p1600`) despite the different IR usercodes.
+remote (`usb:v2B54p1600`) despite the different IR usercodes, so 🟡 the H96 Max 3518D ships a `hwdb`
+scancode remap for that id. ❓ **It is deliberately not installed here** — a shared USB id is not a
+shared button layout, and this remote's scancodes have never been captured. Capture them before
+applying it; `docs/remote-keymap.md` has the procedure.
 
 ## Bluetooth
 
@@ -241,9 +244,8 @@ needs a functional consumer. No other board in this BSP sets that bit; the ones 
 Still open:
 
 - **Never exercised**: **HDMI-CEC**, **HDMI 4K60 / EDID mode list / hotplug re-detect**, honest
-  **Wi-Fi throughput** on either band, **USB bus power** for a self-spinning drive, **SD hotplug
-  removal**, **the IR-extender jack**, and **A2DP** to a speaker. Each needs a screen, a drive or
-  hands on the box.
+  **Wi-Fi throughput** on either band, **SD hotplug removal**, **the IR-extender jack**, and
+  **A2DP** to a speaker. Each needs a screen or hands on the box.
 - **Back-to-stock is unverified.** `backup/r69/emmc-full.img` (15,758,000,128 B) is the only route
   back to Android, and a full restore has never been tested — either `dd` to the eMMC node from an
   SD rescue boot, or maskrom + `rkdeveloptool wl 0`. A **partial** restore is proven: on 2026-08-18

@@ -30,8 +30,8 @@ hook, or a unit for hardware only it has (the R69's `rk35xx-bt`).
 `&label`s) · `e2tools` (`./build-e2tools.sh` — the stock one corrupts an image on delete) ·
 `rkdeveloptool` + a per-board maskrom loader (`./build-rktools.sh`) · a per-board `uboot.dts`
 (`./build-uboot-dts.sh`) and the `uboot.itb` a board ships (`./build-uboot.sh`) — or all three at
-once with `./build-firmware-all.sh`. **From the host:** `fdtput` · `fsck.ext4` (keg-only
-on Homebrew: `/opt/homebrew/opt/e2fsprogs/sbin/`) · `xz` · `npx prettier`. **On the box:** `evtest`,
+once with `./build-firmware-all.sh`. **From the host:** `fdtput` · `fsck.ext4` (keg-only on
+Homebrew: `/opt/homebrew/opt/e2fsprogs/sbin/`) · `xz` · `npx prettier`. **On the box:** `evtest`,
 `fio`, `stress-ng`, `iw`, `bluez`.
 
 ## Where things are written down
@@ -45,11 +45,14 @@ another, so nothing rots when one is rewritten.
 | `docs/board-validation.md`            | the criteria of done, and the caveats behind them                     |
 | `docs/mpp.md`                         | reaching the video engines; the codec test commands                   |
 | `docs/armbian-install.md`             | the factory reserved window: what survives a migration, what does not |
+| `docs/emmc-layout.md`                 | the measured eMMC map: every replicated structure and its sectors     |
 | `docs/uboot.md`                       | the bootloader pair: what we build, what stays factory, why           |
 | `docs/maskrom.md`                     | the USB service modes: entry, the 32 MiB Loader trap, backup, restore |
 | `docs/apt-upgrade.md`                 | the hooks and the hold that keep the overlay alive across upgrades    |
 | `docs/watchdog.md`                    | why it cannot be stopped, and why a soft reboot can strand the box    |
+| `docs/hdmi-edid-override.md`          | banning a display mode the panel advertises but nothing should pick   |
 | `docs/remote-keymap.md`               | validating IR and BLE keymaps separately; the `hwdb` override         |
+| `research/<experiment>/`              | dead ends and partial results, kept so nobody re-walks them           |
 | `docs/todo/`                          | open questions — `rk35xx-` is family-wide, `<board>-` is one box      |
 | `docs/<board>/board.md`               | that board's identity, measured numbers, known gaps                   |
 | `docs/<board>/dtb.md`                 | that board's device-tree changes, tried and reverted ones too         |
@@ -68,14 +71,21 @@ another, so nothing rots when one is rewritten.
 
 ## Claims and evidence
 
-Five states, meaning exactly what they say: ✅ verified here, 🟢 likely but unverified, 🟡 not
-tested, ❌ tested and broken, ➖ not present on this box. **Never mark something verified because
-the mechanism is shared** — verification is per-board.
+Five states, meaning exactly what they say:
 
-Check before asserting: read the file, query the box, run the command. Several long-standing "facts"
-here turned out to be inherited claims nobody had tested, and a doc is not evidence about hardware —
-reconcile against the box, not against another doc. Don't publish a recipe you haven't run; when a
-claim can't be backed, say so instead of rounding up.
+- **✅ verified here** — run on this box, with the number or output to show for it.
+- **🟡 likely** — not verified here, but there is a reason: the mechanism is proven on a sibling
+  board, or a cheap check settles it.
+- **❓ never tested** — nobody has looked, and nothing predicts the answer.
+- **❌ tested and broken.**
+- **➖ not present on this box.**
+
+**Verification is per-board.** A shared mechanism earns 🟡, never ✅. 🟡 and ❓ are not
+interchangeable: 🟡 has a reason behind it, ❓ is an unknown.
+
+**Check before asserting** — read the file, query the box, run the command. A doc is not evidence
+about hardware; reconcile against the box. Don't publish a recipe you haven't run, and when a claim
+cannot be backed, say so rather than rounding up.
 
 ## Documentation
 
@@ -92,19 +102,49 @@ claim can't be backed, say so instead of rounding up.
 
 - **Pure facts. No poems, no prose, no narrative.** A table or a checklist beats a paragraph. Drop
   anything obvious or inferrable — if a competent reader can work it out, it does not go in.
-- **Keep a doc under 300 lines.** Past that, split it or cut it. Optimise for a human reviewing it;
-  nobody reads a thousand-line poem, and neither will an AI asked to act on it. `worklog.md` is the
-  one exception — it is append-only dated history, and rewriting it to fit a limit destroys the
-  record it exists to keep.
-- One claim per line, with the evidence or the command that backs it.
+- **Every word earns its place.** Cut relentlessly: a sentence restating the one above it, a caveat
+  the command already enforces, an explanation of what the reader can see. Length is the symptom;
+  restatement is the disease.
+- **One claim per line, backed by the command that shows it — not by your proof that you ran it.**
+  "A full pass completes on a full-clock board", never "✅ proven on two boards, spot-verified".
+  Dates and evidence belong in `worklog.md`.
+- **One command, one line.** The mechanism behind it goes in `docs/todo/` or the patch that
+  implements it. Never warn against a command the doc does not give, or defend against a state it
+  forbids.
+- **Keep a doc around 300 lines** — past that by much, split it or cut it. Two exceptions:
+  `docs/<board>/board.md` gets 500, and `worklog.md` has no limit, being append-only history.
 - **README is scannable**: no filler, no repeated links, no per-board hardcoding where a pattern
   works. Warnings go in blockquotes. Humour is fine; it must not cost clarity.
 - `npx prettier --write` on every markdown file you touch.
 
+## Writing a reference doc
+
+- **One doc, one subject.** Check every block against the title; move what fits only by adjacency.
+- **Say where a command runs** — host, box, U-Boot prompt, maskrom. Read in the wrong context, a
+  block is a destructive mistake.
+- **Blocks in the order they are performed.** "Do this first" under the second block is a bug.
+- **Lead with the procedure.** A reference table comes after it, never instead.
+- **A table cell is a label, not a sentence.** Markdown is read as source as often as rendered, and
+  prettier will not wrap a table: a row past 100 columns is unreadable in the file. Keep cells to a
+  few words and put any clause in the prose below.
+- **One column, one kind of thing. One row per case.**
+- **One name per thing.** Say once that two names mean the same, then pick one.
+- **The marker carries the uncertainty.** ❓ already says untested.
+- **Never say it twice in two shapes.**
+- **Never write ❌ for something nobody tried.** Untried is ❓; reasoned-but-unmeasured is 🟡, with
+  the reasoning named.
+- **Never enumerate the boards.** State the mechanism and the selector; the per-board answer lives
+  in that board's `board.md`.
+- **Say "known here"** — never imply a list is exhaustive.
+- **A limitation being fixed is current, not permanent.**
+- **History belongs in `worklog.md`.** A **date on a claim is evidence, not history**:
+  `✅ measured 2026-08-20` belongs.
+
 ## Code
 
-Less code is better. Communicate through names, not comments; comment only a non-obvious _why_, and
-keep it shorter than the code it explains. One responsibility per script.
+Less code is better. Communicate through names, not comments: comment a non-obvious _why_ only,
+never what the code already says, and keep it shorter than the code it explains. One responsibility
+per script.
 
 ## Reach for the lowest layer that can express it
 

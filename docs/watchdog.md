@@ -32,11 +32,21 @@ clamps to 89 s, so systemd believes it has ~7× more protection than the hardwar
 Boot is ~16 s on the R69, so doubling the window roughly doubles the margin before the carry-over
 bites. It is **not** a guarantee: 89 s is the ceiling, and a slow shutdown still eats the budget.
 
-🟢 **The carry-over failure has not been observed on either box here.** It was recorded on a sibling
-RK3518-class box running the Seekwave stack: after heavy `stress-ng --cpu 8 --io 4 --vm 2`, ramoops
-caught `watchdog: watchdog0: watchdog did not stop!` immediately before `reboot: Restarting system`,
-the next boot was reset at 15.91 s monotonic, and the box stayed dark for six hours until power was
-pulled. Same SoC and same watchdog block, so treat it as live here until proven otherwise.
+🟡 **The warning is now seen here; the strand that followed it is not.** It was first recorded on a
+sibling RK3518-class box running the Seekwave stack: after heavy `stress-ng --cpu 8 --io 4 --vm 2`,
+ramoops caught `watchdog: watchdog0: watchdog did not stop!` immediately before
+`reboot: Restarting system`, the next boot was reset at 15.91 s monotonic, and the box stayed dark
+for six hours until power was pulled.
+
+On 2026-09-07 the **same line appeared on the H96 Max 3518D**, in `console-ramoops-0` from an
+ordinary `systemctl reboot` after a long media session — same position, immediately before
+`reboot: Restarting system`. That box came back normally, so the carry-over reset has still not been
+reproduced on hardware here. But the precursor is no longer hypothetical on this family, and the
+rule below is not theoretical either.
+
+A `console-ramoops-N` file on its own is **not** a crash: it is the console backend, which ramoops
+records continuously by design, and it appears after any warm reboot where DRAM survived. A real
+panic or oops leaves a `dmesg-ramoops-N`. There has never been one on these boxes.
 
 **Do not soft-reboot one of these boxes unattended.** Anything that can reboot it — a dead-man
 timer, `systemctl reboot` inside a script — needs someone who can reach the power.

@@ -7,7 +7,7 @@ none of it is a real fault; most is drivers announcing normal progress.
 
 Two entries dominate the err/warn count:
 
-- **A `WARNING` plus AArch64 code dump at probe, ~50 lines, on both boards.**
+- **A `WARNING` plus AArch64 code dump at probe, ~50 lines, on the R69 and the H96 Max.**
   `drivers/gpio/gpiolib-devres.c:327 devm_gpiod_put+0x34/0x44`, reached from `stmmac_mdio_reset` →
   `__mdiobus_register`. These boards have an integrated PHY and no reset line — dmesg says "No PHY
   reset control found" — so the driver puts a GPIO it never got. Benign: ethernet still measures 94

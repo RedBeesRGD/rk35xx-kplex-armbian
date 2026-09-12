@@ -34,7 +34,7 @@ bus-limited. That is what SDR104 would buy back.
 
 ## 4. Wi-Fi TX latch
 
-✅ Deployed 2026-08-25, `txba_stale_sec=10` live. 🟢 Not re-tested against the reproducer since —
+✅ Deployed 2026-08-25, `txba_stale_sec=10` live. 🟡 Not re-tested against the reproducer since —
 inducing the latch needs 2.4 GHz plus CPU load on a daily driver. This box logged one `stale TXBA`
 recovery before the deploy, so the detection does fire on real hardware.
 `0002-skw-renegotiate-silently-dropped-tx-ba.patch` detects a TX BA session the firmware dropped

@@ -52,13 +52,13 @@ Checked against the seven serdev drivers already in `drivers/bluetooth/`:
   `hci_uart_set_flow_control()`, whose `enable` argument is inverted
 - no enable GPIO: this board powers the controller from the SDIO side and its node has none
 
-Until it merges the shipped DTB cannot declare the serdev child at all; `r69/dtb.md` records that
-divergence and the condition that ends it.
+Until it merges the shipped DTB cannot declare the serdev child at all, so the node is carried as a
+comment; `r69/dtb.md` records why and the condition that ends it.
 
 ## Our U-Boot cannot read `LAN_MAC` at all
 
 ✅ Verified against the shipped blob and the build tree. Vendor storage is a Rockchip downstream
-driver; we build **mainline**, which has none — `strings` on `firmware/common/u-boot.itb` finds no
+driver; we build **mainline**, which has none — `strings` on `firmware/common/uboot.itb` finds no
 `vendor_storage`, no `LAN_MAC`, no `rockchip_set_ethaddr`.
 
 So `end0` is handed `local-mac-address` from mainline's `rockchip_setup_macaddr()`
@@ -82,7 +82,7 @@ only), which is why `rk35xx-vendor-storage` gets the label address whatever the 
 
 ## Addresses the store does not hold
 
-✅ `WIFI_MAC` and `BT_MAC` are empty on both boxes, so the Wi-Fi driver invents one per boot.
+✅ `WIFI_MAC` and `BT_MAC` are empty on every box here, so the Wi-Fi driver invents one per boot.
 `rk35xx-mac-pin` derives instead — locally administered, from `serial-number` (which
 `rockchip-cpuinfo` folds from the 16-byte `otp_id: id@a` cell on `otp@ffce0000`), identical every
 boot and from either medium, writing nothing.
