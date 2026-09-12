@@ -304,7 +304,7 @@ for i in 0 1 2 3 4; do   # the BootROM scans five slots 1024 sectors apart
   sudo dd if=firmware/r69/factory_idbloader.bin of=$EMMC bs=512 \
     seek=$((64 + i * 1024)) count=1024 conv=notrunc
 done
-sudo dd if=firmware/common/uboot.itb          of=$EMMC seek=16384 conv=notrunc; sync
+sudo dd if=firmware/r69/uboot.itb of=$EMMC seek=16384 conv=notrunc; sync
 ```
 
 > **Images built before August 2026 soft-brick on `armbian-install`**
