@@ -35,6 +35,9 @@ slots. The file was called `u-boot.itb` before 2026-09-05, on disk as well as in
 
 ## Why the idbloader stays factory
 
+Nothing from the reserved window may be shipped in a generic image: `DVKR` at 7168 and `SSKR` at
+8192 are that unit's MAC, serial and keys.
+
 Its DDR tuning is the only one proven stable on this DRAM die; public rkbin DDR blobs are a lottery.
 The failure is a random `Synchronous Abort` whose `far` register holds ASCII text — RAM corruption,
 not a code bug. Carve it per board; it is the one bootloader file that is not shared.

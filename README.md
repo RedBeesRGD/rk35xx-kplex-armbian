@@ -113,22 +113,16 @@ sudo poweroff                                # pull the SD; it boots from eMMC
 Dump the **disk**, not partitions. Check `stat -c %s emmc-stock.img` equals
 `cat /sys/block/mmcblkX/size` × 512, and keep it off the box and off the SD card.
 
-> **`armbian-install` zeroes the first 10 MiB**, destroying vendor storage (`DVKR` at sector 7168,
-> holding your label `LAN_MAC`) and secure storage (`SSKR` at 8192, HDCP/DRM keys). Neither
-> regenerates. Restore the window afterwards:
+> **`armbian-install` clears everything below sector 20480** — including vendor storage (`DVKR` at
+> 7168, your label `LAN_MAC`) and secure storage (`SSKR` at 8192, HDCP/DRM keys). Current images
+> spare that window, older ones do not, and neither store regenerates. Put it back from your dump
+> every time; it is a no-op if the installer spared it:
 >
 > ```sh
 > dd if=emmc-stock.img bs=512 skip=7168 count=9216 of=window.bin          # on the host
 > sudo dd if=window.bin of=/dev/mmcblkX bs=512 seek=7168 count=9216 conv=notrunc,fsync
 > sudo rk35xx-vendor-storage lan                                          # must match the box label
 > ```
-
-Only the partition table (sectors 0–5) and the U-Boot region should differ afterwards:
-
-```sh
-sudo dd if=/dev/mmcblkX bs=512 count=32768 \
-  | cmp -l - <(ssh you@host 'dd if=emmc-stock.img bs=512 count=32768 2>/dev/null')
-```
 
 ## Update a running box
 
