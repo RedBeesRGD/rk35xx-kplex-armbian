@@ -49,6 +49,7 @@ another, so nothing rots when one is rewritten.
 | `docs/maskrom.md`                     | the USB service modes: entry, the 32 MiB Loader trap, backup, restore |
 | `docs/apt-upgrade.md`                 | the hooks and the hold that keep the overlay alive across upgrades    |
 | `docs/watchdog.md`                    | why it cannot be stopped, and why a soft reboot can strand the box    |
+| `docs/remote-keymap.md`               | validating IR and BLE keymaps separately; the `hwdb` override         |
 | `docs/todo/`                          | open questions — `rk35xx-` is family-wide, `<board>-` is one box      |
 | `docs/<board>/board.md`               | that board's identity, measured numbers, known gaps                   |
 | `docs/<board>/dtb.md`                 | that board's device-tree changes, tried and reverted ones too         |

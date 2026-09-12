@@ -5,3 +5,7 @@ SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="hdmi_cec_key",   SYMLINK+="i
 SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="dw_hdmi",        SYMLINK+="input/hdmi"
 SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="rockchip,hdmi*", SYMLINK+="input/hdmi-sound"
 SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="bt-powerkey",    SYMLINK+="input/bt-powerkey"
+# one symlink per interface — two rules on one name race for the link
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Bluetooth remote Keyboard", SYMLINK+="input/bt-remote"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Bluetooth remote Consumer Control", SYMLINK+="input/bt-remote-consumer"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Bluetooth remote Mouse", SYMLINK+="input/bt-remote-mouse"

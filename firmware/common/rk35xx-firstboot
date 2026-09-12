@@ -35,6 +35,13 @@ done
 depmod -a
 systemctl restart systemd-modules-load 2>/dev/null || true
 
+# udev reads only the compiled hwdb.bin, and only a board shipping a keymap has one to compile
+if [ -n "$(ls -A /etc/udev/hwdb.d 2>/dev/null)" ]; then
+  systemd-hwdb update || true
+  udevadm control --reload || true                  # udevd caches the compiled hwdb
+  udevadm trigger --subsystem-match=input || true   # the remote enumerated before the keymap existed
+fi
+
 # interfaces whose driver was just built did not exist when mac-pin ran at boot. Call the script,
 # not the unit: a blocking systemctl job from inside first boot can stall on ordering.
 [ -x /usr/local/sbin/rk35xx-mac-pin ] && /usr/local/sbin/rk35xx-mac-pin || true
