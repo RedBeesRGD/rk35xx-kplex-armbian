@@ -769,6 +769,9 @@
 			mode-charge = <0x5242c30b>;
 			mode-fastboot = <0x5242c309>;
 			mode-loader = <0x5242c301>;
+			/* `reboot maskrom` from the OS: the factory SPL reads this register
+			 * on the way up and hands to the BootROM — no button, no serial */
+			mode-maskrom = <0xef08a53c>;
 			mode-normal = <0x5242c300>;
 			mode-recovery = <0x5242c303>;
 			mode-ums = <0x5242c30c>;
