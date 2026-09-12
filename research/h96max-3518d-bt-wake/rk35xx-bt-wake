@@ -1,0 +1,27 @@
+#!/bin/sh
+# BT is the only wake source on this board — no RTC, no IR receiver. The kernel's suspend path arms
+# the LE accept list so an accept-listed HID device can wake the host, but it refuses to program a
+# device whose IRK it holds while LL privacy is off (hci_le_add_accept_list_sync: "Accept list can
+# not be used with RPAs", -EINVAL). With an empty list hci_passive_scan_sync() starts no scan during
+# suspend and nothing can wake the box. LL privacy can only be toggled with the controller powered
+# down, so bluetoothd is the only thing that could enable it; dropping the IRK is the smaller lever,
+# and a public-address remote never advertises with an RPA so its IRK is dead weight. bluetoothd
+# reloads the store on every start, hence this runs as its ExecStartPre.
+for f in /var/lib/bluetooth/*/*/info; do
+	[ -f "$f" ] || continue
+	grep -q '^AddressType=public$' "$f" || continue
+	grep -q '^\[IdentityResolvingKey\]$' "$f" || continue
+	# exactly one section fewer than the original - the IRK and nothing else. A short write costs
+	# the pairing, and a check on a field near the top of the file would not catch one.
+	if awk 'BEGIN { keep = 1 } /^\[/ { keep = ($0 != "[IdentityResolvingKey]") } keep' \
+		"$f" > "$f.rk35xx" &&
+		[ "$(grep -c '^\[' "$f.rk35xx")" -eq "$(($(grep -c '^\[' "$f") - 1))" ] &&
+		chmod --reference="$f" "$f.rk35xx" && mv "$f.rk35xx" "$f"; then
+		logger -t rk35xx-bt-wake "dropped IRK from $f so the remote can be accept-listed"
+	else
+		logger -t rk35xx-bt-wake "FAILED to drop IRK from $f - BT wake will not work"
+	fi
+	rm -f "$f.rk35xx"
+done
+
+exit 0   # never block bluetoothd: without the IRK dropped BT wake fails, but BT itself still works
