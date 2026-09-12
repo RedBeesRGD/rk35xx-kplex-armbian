@@ -78,3 +78,10 @@ The `dtbo` partition holds real overlays (magic `d7b7ab1e`), not yet split — c
 gpio claims (`/sys/kernel/debug/gpio`), `pinmux-pins`, full `getprop`, `lsmod`, live
 `/sys/firmware/fdt`. The carved DTB + `boot.log` cover most of what those provided on the R69.
 `iomem.txt` here is address-zeroed (read without root) — re-dump with root if ever needed.
+
+## `uboot.dtb` / `uboot.dts`
+
+The factory U-Boot's own control device tree, not the kernel's. Carved from the U-Boot FIT in the
+eMMC backup — `dd if=backup/h96max/emmc-full.img bs=512 skip=16384 count=8192`, then the second
+`d00dfeed` inside that FIT. Round-trips exactly through our patched `dtc`. It describes uart2, eMMC
+timing, `saradc` and `adc-keys` (the download key) — and no USB controllers at all.

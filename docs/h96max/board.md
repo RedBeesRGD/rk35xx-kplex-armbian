@@ -253,6 +253,9 @@ echo $EMMC    # sanity-check: ~16 GB, NOT your SD
 ```
 
 ```sh
-sudo dd if=firmware/h96max/factory_idbloader.bin of=$EMMC seek=64    conv=notrunc
-sudo dd if=firmware/common/u-boot.itb            of=$EMMC seek=16384 conv=notrunc; sync
+for i in 0 1 2 3 4; do   # the BootROM scans five slots 1024 sectors apart
+  sudo dd if=firmware/h96max/factory_idbloader.bin of=$EMMC bs=512 \
+    seek=$((64 + i * 1024)) count=1024 conv=notrunc
+done
+sudo dd if=firmware/common/uboot.itb           of=$EMMC seek=16384 conv=notrunc; sync
 ```

@@ -283,8 +283,11 @@ images, and the eMMC is the disk with `boot0`/`boot1` companions.
 EMMC=/dev/$(ls -d /sys/block/mmcblk*boot0 | head -1 | sed 's|.*/||;s|boot0||')
 echo $EMMC    # sanity-check: ~16 GB, NOT your SD
 
-sudo dd if=firmware/r69/factory_idbloader.bin of=$EMMC seek=64    conv=notrunc
-sudo dd if=firmware/common/u-boot.itb         of=$EMMC seek=16384 conv=notrunc; sync
+for i in 0 1 2 3 4; do   # the BootROM scans five slots 1024 sectors apart
+  sudo dd if=firmware/r69/factory_idbloader.bin of=$EMMC bs=512 \
+    seek=$((64 + i * 1024)) count=1024 conv=notrunc
+done
+sudo dd if=firmware/common/uboot.itb          of=$EMMC seek=16384 conv=notrunc; sync
 ```
 
 > **Images built before August 2026 soft-brick on `armbian-install`**

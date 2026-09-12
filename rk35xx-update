@@ -79,12 +79,6 @@ OLD_DTB="$(dtbsum)"
 # Delete artifacts of earlier layouts. Paths are named here only so they can be removed; what the
 # payload installs is payload.list.
 migrate() {
-	# u-boot.itb was renamed to uboot.itb; the payload install right after this puts the new one in
-	if [ -e "$SHARE/u-boot.itb" ]; then
-		echo "  migrating: removing $SHARE/u-boot.itb"
-		rm -f "$SHARE/u-boot.itb"
-	fi
-
 	old_units="r69-firstboot.service r69-mac-pin.service r69-bt.service"
 	for u in $old_units; do
 		[ -e "/etc/systemd/system/$u" ] || continue
@@ -109,10 +103,31 @@ migrate() {
 	done
 	rm -rf /usr/src/rockchip-pwm-remotectl-r69-1.0 /usr/src/rk630-phy-r69-1.0 /usr/src/rk630-phy-rk35xx-1.0
 
-	for f in /etc/systemd/system/getty.target.wants/serial-getty@ttyFIQ0.service \
-		/etc/systemd/system/serial-getty@ttyFIQ0.service; do
-		if [ -e "$f" ]; then echo "  migrating: removing $f"; rm -f "$f"; fi
-	done
+	# Stale on a board that disables the vendor fiq-debugger: the device never appears and the getty
+	# waits out a 90 s timeout. Decide from board data — the run installing that DTB has no node yet.
+	case "${BOARD_SERIALCON:-}" in
+	*ttyFIQ0*) ;;
+	*)
+		for f in /etc/systemd/system/getty.target.wants/serial-getty@ttyFIQ0.service \
+			/etc/systemd/system/serial-getty@ttyFIQ0.service; do
+			if [ -e "$f" ]; then echo "  migrating: removing $f"; rm -f "$f"; fi
+		done ;;
+	esac
+
+	# a board that stopped shipping the shared modules list must lose the copy an older image left,
+	# or systemd-modules-load fails on every boot for modules it does not have
+	if [ -e /etc/modules-load.d/rk35xx.conf ] &&
+		! grep -q '/etc/modules-load.d/rk35xx.conf' "$FW/$BOARD_PAYLOAD"; then
+		echo "  migrating: removing /etc/modules-load.d/rk35xx.conf"
+		rm -f /etc/modules-load.d/rk35xx.conf
+	fi
+
+	# u-boot.itb was renamed to uboot.itb; the payload install right after this puts the new one in
+	if [ -e "$SHARE/u-boot.itb" ]; then
+		echo "  migrating: removing $SHARE/u-boot.itb"
+		rm -f "$SHARE/u-boot.itb"
+	fi
+
 	return 0
 }
 migrate
@@ -120,13 +135,17 @@ migrate
 echo "[1/5] installing firmware payload ($BOARD)"
 while read -r mode src dest; do
   case "$mode" in ''|\#*) continue ;; esac
-  install -D -m "$mode" "$FW/$src" "$dest"
+  # one payload entry is this script: truncating the inode the shell is reading resumes it mid-token.
+  # The staging name is hidden and .new-suffixed, which systemd and run-parts both skip.
+  stage="$(dirname "$dest")/.$(basename "$dest").rk35xx-new"
+  install -D -m "$mode" "$FW/$src" "$stage"
+  mv -f "$stage" "$dest"
 done < "$FW/$BOARD_PAYLOAD"
 "/usr/local/sbin/$P-boardname"   # re-assert the login-banner name (apt upgrades reset it)
 
 echo "[2/5] refreshing DKMS driver sources + rebuilding"
-# Makefile and dkms.conf come from payload.list; only the sources are fetched
-"$FW/common/fetch-dkms-src.sh" "$DKMS_IR"
+# a board with no IR receiver ships neither the Makefile nor dkms.conf that the fetch needs
+if [ -f "$DKMS_IR/dkms.conf" ]; then "$FW/common/fetch-dkms-src.sh" "$DKMS_IR"; fi
 
 # rebuild so a changed source or a new kernel actually takes: remove --all, then add/build/install.
 # Version comes from the directory name, so 1.0 and 1.0.0 packages both work.
@@ -137,13 +156,14 @@ dkms_rebuild() {
   dkms build   -m "$name" -v "$ver" || { echo "  ($name dkms build failed; continuing)"; return 0; }
   dkms install -m "$name" -v "$ver" || echo "  ($name dkms install failed; continuing)"
 }
-dkms_rebuild "$DKMS_IR"
+if [ -f "$DKMS_IR/dkms.conf" ]; then dkms_rebuild "$DKMS_IR"; fi
 
 # boards that fetch their own DKMS sources declare them as "<pkg>-<ver>:<fetch script>" pairs
 for e in ${BOARD_DKMS_FETCH:-}; do
   d="/usr/src/${e%%:*}"
   echo "  fetching ${e%%:*}"
-  "$FW/${e#*:}" "$d" || { echo "  (fetch failed; keeping the staged source)"; }
+  # the fetch swaps in place, so a failure leaves the previous tree whole — rebuild from it
+  "$FW/${e#*:}" "$d" || echo "  (fetch failed; rebuilding the staged source)"
   dkms_rebuild "$d"
 done
 
@@ -152,9 +172,12 @@ echo "[3/5] installing the DTB into the running kernel"
 
 echo "[4/5] reloading systemd + restarting changed services"
 systemctl daemon-reload
+# udev reads only the compiled hwdb.bin; skip the rebuild on boards that ship no keymap
+[ -n "$(ls -A /etc/udev/hwdb.d 2>/dev/null)" ] && systemd-hwdb update || true
 # device-node rules only apply to nodes that already exist after a re-trigger (VPU: mpp_class, misc)
 udevadm control --reload
-udevadm trigger --subsystem-match=mpp_class --subsystem-match=misc --subsystem-match=dma_heap
+udevadm trigger --subsystem-match=mpp_class --subsystem-match=misc --subsystem-match=dma_heap \
+  --subsystem-match=input
 for s in ${BOARD_UPDATE_RESTART:-}; do systemctl restart "$s" 2>/dev/null || true; done
 for s in ${BOARD_UPDATE_TRY_RESTART:-}; do systemctl try-restart "$s" 2>/dev/null || true; done
 echo "  (power-key / suspend drop-ins take effect after 'systemctl restart systemd-logind' or a reboot)"
