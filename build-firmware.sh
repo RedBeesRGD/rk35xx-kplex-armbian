@@ -21,7 +21,4 @@ sel=$(with uboot.patch)                      # stock uboot.dtb + uboot.patch -> 
 
 # after build-uboot-dts.sh: a board getting its first uboot.dts is only buildable once it exists
 sel=$(with uboot.dts)
-if [ -n "$sel" ]; then
-	# build-uboot.sh needs a Linux host; on macOS the wrapper runs it in a pinned container
-	if [ "$(uname -s)" = Linux ]; then ./build-uboot.sh $sel; else ./build-uboot-finch.sh $sel; fi
-fi
+[ -z "$sel" ] || ./build-uboot.sh $sel

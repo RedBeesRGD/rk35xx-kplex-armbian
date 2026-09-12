@@ -57,6 +57,7 @@ another, so nothing rots when one is rewritten.
 | `docs/r69/upstream.md`                | what the two closed upstream submissions established, and why         |
 | `upstream/README.md`                  | turning the grafts into something upstreamable                        |
 | `patches/dtc/README.md`               | the patched `dtc` that round-trips a vendor blob with `&label`s       |
+| `patches/u-boot/README.md`            | the two fixes U-Boot's pylibfdt build needs off Linux                 |
 | `patches/rkdeveloptool/README.md`     | the patched `pack`; why the stock one cannot build a usable loader    |
 | `patches/e2tools/README.md`           | the patched `e2tools`; why the stock one corrupts an image on delete  |
 | `patches/linux-rockchip/README.md`    | the kernel fixes and their PRs; why an overlay box cannot apply them  |

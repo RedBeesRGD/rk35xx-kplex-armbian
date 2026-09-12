@@ -1,0 +1,19 @@
+diff --git a/scripts/dtc/pylibfdt/Makefile b/scripts/dtc/pylibfdt/Makefile
+index ce9c2d09..a6b69dc4 100644
+--- a/scripts/dtc/pylibfdt/Makefile
++++ b/scripts/dtc/pylibfdt/Makefile
+@@ -16,9 +16,13 @@ PYLIBFDT_srcs = $(addprefix $(LIBFDT_srcdir)/,$(LIBFDT_SRCS)) \
+ # create a version string compliant with PEP 440
+ PEP_VERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(subst -,,$(EXTRAVERSION))
+ 
++# A Python extension resolves its interpreter symbols at load time. ELF links that with -shared;
++# Mach-O needs -bundle -undefined dynamic_lookup, or every Py* symbol is left undefined.
++PYMOD_LDSHARED = $(if $(filter Darwin,$(shell uname -s)),-bundle -undefined dynamic_lookup,-shared)
++
+ quiet_cmd_pymod = PYMOD   $@
+       cmd_pymod = unset CROSS_COMPILE; unset CFLAGS; \
+-		CC="$(HOSTCC)" LDSHARED="$(HOSTCC) -shared " \
++		CC="$(HOSTCC)" LDSHARED="$(HOSTCC) $(PYMOD_LDSHARED) " \
+ 		LDFLAGS="$(HOSTLDFLAGS)" \
+ 		VERSION="$(PEP_VERSION)" \
+ 		CPPFLAGS="$(HOSTCFLAGS) -I$(LIBFDT_srcdir)" OBJDIR=$(obj) \

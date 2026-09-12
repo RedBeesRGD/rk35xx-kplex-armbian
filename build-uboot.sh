@@ -6,6 +6,7 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")" && pwd)"
 BUILD="$REPO/uboot-build"                         # scratch (gitignored): the clones + one tree per board
 FW="$REPO/firmware"
+PATCHES="$REPO/patches/u-boot"
 
 # --- pinned dependencies (bump deliberately, never float) ---
 UBOOT_REPO="https://github.com/u-boot/u-boot.git"
@@ -25,15 +26,42 @@ boards() {
   done
   return 0   # the last board need not be one of them, and set -e would take that as failure
 }
-[ "$(uname -s)" = Linux ] || { echo "Linux host needed — on macOS run ./build-uboot-finch.sh"; exit 1; }
-
 BOARDS="${*:-$(boards)}"
 [ -n "$BOARDS" ] ||
   { echo "no board ships its own uboot.itb — name a board"; exit 1; }
-# native gcc on arm64, cross prefix otherwise
-if [ "$(uname -m)" = aarch64 ] && ! command -v aarch64-linux-gnu-gcc >/dev/null; then
-  : "${CROSS_COMPILE:=}"; else : "${CROSS_COMPILE:=aarch64-linux-gnu-}"; fi
-export CROSS_COMPILE ARCH=arm64
+
+MAKE=make
+if [ "$(uname -s)" = Darwin ]; then
+  command -v brew >/dev/null || { echo "Homebrew needed — https://brew.sh"; exit 1; }
+  missing=
+  for f in aarch64-elf-gcc make coreutils openssl@3 swig; do
+    brew list --versions "$f" >/dev/null 2>&1 || missing="$missing $f"
+  done
+  [ -z "$missing" ] || { echo "Missing build tools — run: brew install$missing"; exit 1; }
+
+  # Kbuild wants make 4.x and nproc; macOS ships make 3.81 and neither
+  PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+  MAKE=gmake
+  : "${CROSS_COMPILE:=aarch64-elf-}"   # bare metal: U-Boot links no libc, so no glibc toolchain
+  # openssl is keg-only, and the host tools reach <openssl/evp.h> from objects pkg-config never sees
+  SSL="$(brew --prefix openssl@3)"
+  export PKG_CONFIG_PATH="$SSL/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+  export HOSTCFLAGS="-I$SSL/include${HOSTCFLAGS:+ $HOSTCFLAGS}"
+  export HOSTLDFLAGS="-L$SSL/lib${HOSTLDFLAGS:+ $HOSTLDFLAGS}"
+  # binman imports pyelftools, and pylibfdt's setup.py imports setuptools, which a venv no longer
+  # ships by default; keep both off the system python
+  VENV="$BUILD/hostvenv"
+  mkdir -p "$BUILD"
+  [ -x "$VENV/bin/python" ] || python3 -m venv "$VENV"
+  "$VENV/bin/python" -c 'import elftools, setuptools' 2>/dev/null ||
+    "$VENV/bin/pip" -q install pyelftools setuptools
+  PATH="$VENV/bin:$PATH"
+else
+  # native gcc on arm64, cross prefix otherwise
+  if [ "$(uname -m)" = aarch64 ] && ! command -v aarch64-linux-gnu-gcc >/dev/null; then
+    : "${CROSS_COMPILE:=}"; else : "${CROSS_COMPILE:=aarch64-linux-gnu-}"; fi
+fi
+export PATH CROSS_COMPILE ARCH=arm64
 command -v "${CROSS_COMPILE}gcc" >/dev/null || { echo "Missing ${CROSS_COMPILE}gcc toolchain"; exit 1; }
 
 for b in $BOARDS; do
@@ -56,9 +84,17 @@ fi
 [ "$(git -C u-boot describe --tags --exact-match 2>/dev/null)" = "$UBOOT_TAG" ] ||
   { echo "uboot-build/u-boot is not at $UBOOT_TAG - remove it and re-run"; exit 1; }
 
+# U-Boot's pylibfdt build assumes Linux and a swig older than 4.3; these make it build on macOS
+git -C u-boot checkout --quiet --force   # a rebuild must not stack patches on the last run's
+git -C u-boot clean -qfd
+for p in "$PATCHES"/*.patch; do
+  echo "  PATCH $(basename "$p")"
+  git -C u-boot apply "$p" || { echo "patch did not apply — u-boot $UBOOT_TAG may have moved"; exit 1; }
+done
+
 cd u-boot
 # each board builds out-of-tree, and Kbuild refuses that while in-tree artifacts remain
-[ -e .config ] && make mrproper >/dev/null
+[ -e .config ] && $MAKE mrproper >/dev/null
 
 for BOARD in $BOARDS; do
   # The FIT embeds a timestamp: pin it to the source it is built from, or a pre-push check cannot
@@ -111,14 +147,14 @@ DTSI
     { echo "$BASE_DEFCONFIG no longer disables ADC the way we patch it — fix the sed"; exit 1; }
 
   O="$BUILD/out-$BOARD"
-  make O="$O" "$BOARD-rk3528_defconfig" >/dev/null
+  $MAKE O="$O" "$BOARD-rk3528_defconfig" >/dev/null
   grep -q '^CONFIG_SARADC_ROCKCHIP=y' "$O/.config" ||
     { echo "SARADC dropped by Kconfig for $BOARD"; exit 1; }
   # the DT sed is the load-bearing one: unguarded, an upstream rename ships a board FIT built
   # against rk3528-generic — generic eMMC timing, and adc@ instead of saradc@ so the button dies
   grep -q "^CONFIG_DEFAULT_DEVICE_TREE=\"$DT\"" "$O/.config" ||
     { echo "$BASE_DEFCONFIG no longer names its DT the way we patch it — fix the sed"; exit 1; }
-  make O="$O" -j"$(nproc)" BL31="$BUILD/rkbin/$BL31" ROCKCHIP_TPL="$BUILD/rkbin/$TPL"  # binman emits u-boot.itb (FIT: ATF + u-boot)
+  $MAKE O="$O" -j"$(nproc)" BL31="$BUILD/rkbin/$BL31" ROCKCHIP_TPL="$BUILD/rkbin/$TPL"  # binman emits u-boot.itb (FIT: ATF + u-boot)
   cp "$O/u-boot.itb" "$FW/$BOARD/uboot.itb"                                          # ship only this FIT; the built idbloader is discarded
   # the clone is pinned and reused, so take the generated inputs back out: a renamed or dropped
   # board would otherwise leave a stale defconfig and DTS that a later run could build against

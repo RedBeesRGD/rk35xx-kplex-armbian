@@ -176,13 +176,25 @@ rebuild changed nothing.
 
 ```sh
 ./build-firmware-all.sh               # every board's tree and FIT, then reports what moved
-./build-uboot.sh [<board>…]           # the FIT alone; macOS: ./build-uboot-finch.sh, same arguments
+./build-uboot.sh [<board>…]           # the FIT alone; macOS builds natively, see below
 
 strings -a firmware/<board>/uboot.itb | grep -E 'bl31-v|fdt-rk3528'   # identify a suspect blob
 # bl31-v1.21 / fdt-rk3528-<board>
 
 sudo dd if=firmware/<board>/uboot.itb of=/dev/<sd> bs=512 seek=16384 conv=notrunc; sync
 ```
+
+On macOS the build is native — `build-uboot.sh` names any missing Homebrew formula and stops:
+
+```sh
+brew install aarch64-elf-gcc make coreutils openssl@3 swig
+```
+
+U-Boot links no libc, so the bare-metal `aarch64-elf-` toolchain is enough; no glibc cross-compiler
+and no container. `patches/u-boot/` carries the two fixes its pylibfdt build needs off Linux, and
+`binman` gets `pyelftools` from a venv under `uboot-build/`. **A macOS FIT is not byte-identical to
+a Linux one** — different compiler, different code — so a board's shipped FIT and the host that
+built it belong together.
 
 Each board builds out-of-tree into `uboot-build/out-<board>/`, from a defconfig generated on the
 spot out of mainline's `generic-rk3528_defconfig`. Nothing is stored that upstream already ships —
