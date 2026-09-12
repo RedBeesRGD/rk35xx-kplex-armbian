@@ -266,15 +266,32 @@ Still open:
 
 ## Recovery
 
-✅ The box **enters maskrom** (2026-08-14): `ld` reported `Vid=0x2207,Pid=0x350c … Maskrom`. 🟡
-Everything past `db` — loading a USB loader, `wl`, a restore — is untested on either board. This box
-uses `rk3528_spl_loader-r69.bin`.
+✅ **Maskrom is proven end to end** (2026-09-12), on this board's own `uboot.itb`. The **recessed
+button inside the AV jack**, held _before_ power reaches the box, lands in `Maskrom` directly:
+U-Boot's `adc-keys` sees it and resets into BootROM download. `db` with `rk3528_spl_loader-r69.bin`,
+then `rfi` (30777344 sectors) and `rl` — a read of sector 64 came back byte-identical to
+`firmware/r69/factory_idbloader.bin`, and slot A read over USB matched the FIT written over ssh.
 
-🟡 **Whether the A-to-A cable alone powers the box is untested.** In maskrom the box is a USB
-peripheral, so a host normally supplies VBUS; the 2026-08-14 run did not record its power source.
-The tree's `vcc5v0_otg` (fixed regulator off `vcc5v0_sys`, GPIO-enabled) describes the port under
-Linux in host mode and does not settle the BootROM case. The rule that holds either way: the button
-must be held **before** power reaches the box, whatever supplies it.
+❌ **It does not work on `firmware/common/uboot.itb`**, which has no ADC — nothing reads the button.
+The button is only as alive as the U-Boot in slot A.
+
+**The OTG port is the USB 3 port.** Use an **A male-to-male** cable; this box has only USB-A ports,
+so add an A-female→C adapter at the host end if that host is USB-C only. Modes and the restore
+commands are in `docs/maskrom.md`.
+
+**Measured over maskrom, 2026-09-12** — one pass each way, all 30777344 sectors, rate flat
+throughout:
+
+| Direction    | Throughput | Full pass                            |
+| ------------ | ---------- | ------------------------------------ |
+| read (`rl`)  | 27 MB/s    | ✅ 15.76 GB, no degradation          |
+| write (`wl`) | 18.4 MB/s  | ✅ 15.76 GB in 858 s, no degradation |
+
+The box booted normally afterwards, with no filesystem errors. Neither direction throttles here;
+`docs/maskrom.md` has the pre-flight signal for boards that do.
+
+✅ **The A-to-A cable alone powers the box** — no PSU, through a full 15.76 GB read and write. The
+button must still be held **before** power reaches it, whatever supplies it.
 
 To rewrite the loader pair by hand, **find the eMMC first**: `mmcblk` numbering shifts between
 images, and the eMMC is the disk with `boot0`/`boot1` companions.

@@ -124,6 +124,11 @@ Dump the **disk**, not partitions. Check `stat -c %s emmc-stock.img` equals
 > sudo rk35xx-vendor-storage lan                                          # must match the box label
 > ```
 
+## No SD slot
+
+A box without a card slot has nothing to boot from, so the backup and the install both go over USB
+in maskrom. `docs/maskrom.md` covers it end to end — see its **Write an image over USB**.
+
 ## Update a running box
 
 For changes in **this repo** — DTB, drivers, scripts. Everything else: `apt upgrade`.
@@ -194,17 +199,8 @@ contact and the TX↔RX crossing. Full kernel log on serial and HDMI: `verbosity
 **SD still boots.** Write the backup back over the eMMC:
 `sudo dd if=emmc-stock.img of=/dev/mmcblkX bs=4M status=progress; sync`.
 
-**Nothing boots, not even the SD.** USB-A-to-A male-to-male to a host port (A-to-C adapter if the
-host is USB-C only); of the box's two ports only the OTG one enumerates. Hold the recessed button in
-the AV jack **before** power reaches the box, keep holding ~3 s, then release:
-
-```sh
-./build-rktools.sh                                     # rkdeveloptool + a loader per board
-./tools/rktools/rkdeveloptool ld                       # Vid=0x2207,Pid=0x350c  Maskrom
-./tools/rktools/rkdeveloptool db tools/rktools/rk3528_spl_loader-<board>.bin   # DDR init; first
-./tools/rktools/rkdeveloptool wl 0 emmc-stock.img      # restore the whole eMMC
-./tools/rktools/rkdeveloptool rd                       # reboot
-```
+**Nothing boots, or the box has no SD slot** — go in over USB: `docs/maskrom.md`, section **Write an
+image over USB**.
 
 ## Credits
 

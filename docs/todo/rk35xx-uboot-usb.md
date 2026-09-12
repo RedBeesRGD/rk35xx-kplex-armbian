@@ -1,4 +1,4 @@
-# Our U-Boot has no USB, and on an SD-less box that is a design fault
+# USB in our U-Boot — what it would take, and what it would buy
 
 Family-wide. Opened 2026-09-05 after the H96 Max 3518D became unreachable mid-flash: our U-Boot
 booted, could not finish booting a partially written rootfs, and — having no USB — presented nothing
@@ -70,11 +70,20 @@ regulators that give them VBUS are not, and belong per board.
 
 1. **`rockusb`** — restores the rescue the factory bootloader had. The 2026-09-05 stuck state could
    not have happened.
-2. **`ums`** — expose the eMMC as a USB block device. Backup and flash become plain `dd` at full
-   speed: no `rkdeveloptool`, no chunking, no 32 MiB `Loader` cap, no thermal babysitting. This
-   alone would have turned a whole evening of chunked transfers into two commands.
-3. **USB host + storage** — boot from a USB stick, which is the SD-slot substitute this board
-   otherwise lacks, and the only cheap way to iterate on a DTB without writing eMMC.
+2. **`ums`** — expose the eMMC as a standard USB block device, so any tool works: `dd`, `mount`,
+   `fsck`, `cp`. The gain is **not** speed or stalls: a full-disk transfer crosses the same OTG link
+   and would stall the same way, needing the same chunking. The gain is that you usually no longer
+   need a full-disk transfer at all — mount the rootfs and copy one file, re-flash a single
+   partition, resume an interrupted copy. rockusb can only express byte ranges into files. **Its
+   trigger already exists end to end**: every board's tree declares `mode-ums = <0x5242c30c>`, and
+   mainline's `setup_boot_mode()` answers `BOOT_UMS` by setting `preboot` to `ums mmc 0`. So
+   `sudo reboot ums` needs no DT change and no code — only `CONFIG_USB_GADGET`,
+   `CONFIG_CMD_USB_MASS_STORAGE` and `CONFIG_USB_FUNCTION_MASS_STORAGE`, none of which are in
+   `generic-rk3528_defconfig` today, plus the USB nodes.
+3. **USB host + storage** — U-Boot itself still comes from eMMC, since `u-boot,spl-boot-order` names
+   only mmc and spi and the SPL is the factory one we never replace. What it buys is loading the
+   **kernel, DTB and rootfs** from a stick: the SD-slot substitute for the OS on a board that has no
+   slot, and the cheap way to iterate on a DTB without writing eMMC.
 
 ## The 32 MiB cap does not exist in mainline
 
@@ -134,6 +143,44 @@ covers the window after systemd starts, which is too late for a kernel that neve
 **Residual gaps:** a hard hang with no watchdog running, and the reboots before the limit is
 reached. Neither is solvable in the bootloader alone, but it turns "open the case and wire serial"
 into "wait for three reboots".
+
+## The rescue argument is the weak one
+
+**The SPL does not implement USB and does not need to** — its answer is to hand back to the BootROM,
+which enumerates and accepts a downloaded loader. That is what `ctrl+b` does, and it is why that
+route survives anything above it. The BootROM's USB is download-only: it takes CODE471/CODE472 into
+SRAM and nothing more, which is why `rfi`, `rl`, `wl` and every `rd` subcode fail until `db` has put
+`usbplug` there to answer them. It is also **device-mode only** — it can never boot from a USB
+stick.
+
+So as _rescue_, USB in U-Boot covers one narrow band and depends on the fragile layer surviving:
+
+| What is broken        | Does USB-in-U-Boot help?                      |
+| --------------------- | --------------------------------------------- |
+| Linux dead, U-Boot ok | ✅ the only case it covers                    |
+| U-Boot dead, SPL ok   | ❌ it died with U-Boot — `ctrl+b` covers this |
+| SPL or DDR init dead  | ❌ nothing but the CLK short                  |
+
+**The case is `ums` and USB-host boot, not rescue.** Those are items 2 and 3 above, and neither is
+reachable any other way: `ums` turns backup and restore into `dd` at full speed with no chunking, no
+stalls and no `rkdeveloptool`; USB host gives the SD-less board removable boot media the BootROM can
+never provide. Judge it on those, not on the rescue it barely improves.
+
+## `reboot loader` is not the way in
+
+`mode-loader = <0x5242c301>` has always been in every board's tree, but ❌ `reboot loader` just
+boots through on our FIT (confirmed 2026-09-12): mainline's `setup_boot_mode()` switch handles only
+`BOOT_FASTBOOT` and `BOOT_UMS`, so nothing acts on `BOOT_LOADER` even once rockusb is built in.
+Making it work needs a U-Boot code patch on top of the Kconfig and the DT nodes.
+
+**Not worth chasing**, because it needs a booted OS — and `reboot maskrom` already covers that case
+with one line of DT and no code (`docs/maskrom.md`). The case this todo exists for is the opposite
+one: **U-Boot alive, Linux dead**, where no reboot flag can help. So trigger rockusb on something
+that does not need Linux — a failed boot, a key, or a timeout — rather than on a reboot mode.
+
+Do not remap `mode-loader` to the maskrom magic either: the value is the vendor's documented one, a
+box booting its factory U-Boot still reaches a real `Loader` with it, and aliasing would collide
+with this work once it lands.
 
 ## Open questions before doing it
 

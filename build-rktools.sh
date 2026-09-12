@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Build the maskrom recovery kit into tools/rktools (gitignored): rkdeveloptool plus one USB loader
-# per board, since a loader carries that board's own DDR init. Native only — USB does not reach a
-# container on macOS.
+# per board, since a loader carries that board's own DDR init.
 #
 # Usage: ./build-rktools.sh              # rkdeveloptool + one loader per board
 #        ./build-rktools.sh --test       # re-check what is already built
@@ -11,6 +10,7 @@ REPO="$(cd "$(dirname "$0")" && pwd)"
 TOOLS="$REPO/tools"                               # gitignored output dir
 BUILD="$TOOLS/src/rktools"                        # scratch clone, one per tool
 OUT="$TOOLS/rktools"
+PATCHES="$REPO/patches/rkdeveloptool"
 RKBIN="$REPO/uboot-build/rkbin"                   # shared with build-uboot.sh, gitignored
 
 # --- pinned dependencies (bump deliberately, never float) ---
@@ -18,8 +18,8 @@ RKDEV_REPO="https://github.com/rockchip-linux/rkdeveloptool.git"
 RKDEV_SHA="304f073752fd25c854e1bcf05d8e7f925b1f4e14"   # master @ 2026-08-14
 RKBIN_REPO="https://github.com/rockchip-linux/rkbin.git"
 RKBIN_SHA="ecb4fcbe954edf38b3ae037d5de6d9f5bccf81f4"
-USBPLUG="bin/rk35/rk3528_usbplug_v1.04.bin"       # serves rl/wl over USB; maskrom-only, never flashed
-SPL="bin/rk35/rk3528_spl_v1.06.bin"               # matches the factory spl-v1.06 banner
+RKBOOT_INI="RKBOOT/RK3528MINIALL.ini"             # declares NEWIDB + RC4_OFF; also names the usbplug and SPL
+USBPLUG="bin/rk35/rk3528_usbplug_v1.04.bin"       # presence of this marks rkbin as fetched
 
 # --- the gate. `pack` obfuscates the blobs, so the DDR init cannot be seen in the packed file;
 # that it came from this board's idbloader is checked at carve time instead. Here: structure. ---
@@ -30,13 +30,15 @@ selftest() {
 	for L in "$OUT"/rk3528_spl_loader-*.bin; do
 		[ -s "$L" ] || continue
 		n=$((n + 1)); b="$(basename "$L" .bin)"; b="${b#rk3528_spl_loader-}"
-		if [ "$(head -c 4 "$L")" = BOOT ] && head -c 64 "$L" | strings | grep -q 8253; then
-			printf '  PASS  %-8s %s bytes, BOOT header, RK3528\n' "$b" "$(wc -c < "$L" | tr -d ' ')"
+		# "LDR " is new-IDB, RC4 off — the only format this BootROM answers; the old "BOOT"
+		# format packs fine and is then ignored in silence
+		if [ "$(head -c 4 "$L")" = "LDR " ] && head -c 64 "$L" | strings | grep -q 8253; then
+			printf '  PASS  %-13s %s bytes, LDR header, RK3528\n' "$b" "$(wc -c < "$L" | tr -d ' ')"
 		else
-			printf '  FAIL  %-8s not an RK3528 BOOT loader\n' "$b"; fail=1
+			printf '  FAIL  %-13s not an RK3528 new-IDB loader\n' "$b"; fail=1
 		fi
 	done
-	[ "$n" -gt 0 ] || { echo "  FAIL  no loaders in $OUT"; return 1; }
+	[ "$n" -gt 0 ] || { echo "  FAIL  no loader in $OUT to verify"; return 1; }
 	[ "$fail" = 0 ] || return 1
 	echo "rktools verified: $n board loader(s), rkdeveloptool runs"
 }
@@ -73,7 +75,13 @@ else
 	rm -rf "$BUILD"
 	git clone --quiet "$RKDEV_REPO" "$BUILD"
 fi
-git -C "$BUILD" checkout --quiet "$RKDEV_SHA"
+git -C "$BUILD" checkout --quiet --force "$RKDEV_SHA"
+git -C "$BUILD" clean -qfd
+
+for p in "$PATCHES"/*.patch; do
+	echo "  PATCH $(basename "$p")"
+	git -C "$BUILD" apply "$p" || { echo "patch did not apply — rkdeveloptool $RKDEV_SHA may have moved"; exit 1; }
+done
 
 cd "$BUILD"
 autoreconf -i >/dev/null
@@ -82,7 +90,6 @@ make -j"$(getconf _NPROCESSORS_ONLN)" >/dev/null
 
 install -m 755 "$BUILD/rkdeveloptool" "$OUT/rkdeveloptool"
 
-# --- the USB loader: rkdeveloptool packs it itself, so this needs no x86 boot_merger ---
 if [ ! -e "$RKBIN/$USBPLUG" ]; then
 	rm -rf "$RKBIN" && mkdir -p "$RKBIN" && ( cd "$RKBIN"
 		git init -q && git remote add origin "$RKBIN_REPO"
@@ -100,39 +107,18 @@ CNT=$(od -An -tu2 -j 122 -N 2 "$IDB" | tr -d ' ')
 dd if="$IDB" of="$RKBIN/$DDR" bs=512 skip="$SEC" count="$CNT" status=none
 strings "$RKBIN/$DDR" | grep -q "^ddr-v" || { echo "no DDR blob at sector $SEC of $IDB"; exit 1; }
 
-# `pack` reads config.ini from the cwd. rkbin's own RKBOOT ini is not usable as-is: this parser
-# indexes LOADER keys from 0 and rejects the [SYSTEM]/[FLAG] sections.
-( cd "$RKBIN"
-	cat > config.ini <<-EOF
-		[CHIP_NAME]
-		NAME=RK3528
-		[VERSION]
-		MAJOR=1
-		MINOR=4
-		[CODE471_OPTION]
-		NUM=1
-		Path1=$DDR
-		Sleep=1
-		[CODE472_OPTION]
-		NUM=1
-		Path1=$USBPLUG
-		[LOADER_OPTION]
-		NUM=2
-		LOADER0=FlashData
-		LOADER1=FlashBoot
-		FlashData=$DDR
-		FlashBoot=$SPL
-		[OUTPUT]
-		PATH=rk3528_spl_loader.bin
-	EOF
-	"$OUT/rkdeveloptool" pack > /dev/null
-	mv rk3528_spl_loader*.bin "$OUT/rk3528_spl_loader-$BOARD.bin"
-	rm -f config.ini "$DDR" )
+# Rockchip's own ini with this board's DDR swapped in, so NEWIDB and RC4_OFF come from their file
+# rather than from ours. Paths in it are relative to the rkbin root, so pack from there.
+LOADER="rk3528_spl_loader-$BOARD.bin"
+sed -e "s|bin/rk35/rk3528_ddr_[^ ]*\.bin|$DDR|g" -e "s|^PATH=.*|PATH=$LOADER|" \
+	"$RKBIN/$RKBOOT_INI" > "$RKBIN/config.ini"
+pack_rc=0
+( cd "$RKBIN" && "$OUT/rkdeveloptool" pack > /dev/null ) || pack_rc=1
+[ "$pack_rc" = 0 ] && mv -f "$RKBIN/$LOADER" "$OUT/$LOADER" || true
+rm -f "$RKBIN/$DDR" "$RKBIN/config.ini"   # never leave scratch in the pinned checkout
+[ "$pack_rc" = 0 ] || { echo "pack failed for $BOARD"; exit 1; }
 echo "  loader $BOARD: $((CNT * 512)) B of DDR init"
 done
 
 echo "built: tools/rktools/rkdeveloptool + $(echo $BOARDS | wc -w | tr -d ' ') loaders"
 selftest
-echo
-echo "Box in maskrom (AV-jack button held at power-on, USB-A-to-A to a real port):"
-echo "  tools/rktools/rkdeveloptool ld     # list devices — should show a Maskrom entry"

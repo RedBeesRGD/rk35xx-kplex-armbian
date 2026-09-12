@@ -49,7 +49,22 @@ payload and an upstreamed board skips it.
       idbloader and `u-boot.itb` differ
 - [ ] `DVKR` at sector 7168 and `SSKR` at 8192 still tagged; `LAN_MAC` still the sticker address
 - [ ] Maskrom proven **before** it is needed — recovery button at power-on, `rkdeveloptool ld`
-      reports `Maskrom`
+      reports `Maskrom`. **Entry is not recovery**: `db`, `rl` and a verified `wl` are a separate
+      claim, and a board that only enumerates has not been shown to be restorable
+- [ ] Proven again **on our U-Boot**, not only the factory one. Replacing slot A can remove the
+      route that reached it: a board whose only path was `Loader` → `rd 3` loses it, because
+      `Loader` is the factory U-Boot serving rockusb and ours serves no USB. **Mandatory on a board
+      with no SD slot** — it is the only way back
+- [ ] `db` loads the board's own loader, and `rfi` reports the true sector count
+- [ ] `rl` verified against a known range — a read of sector 64 must match
+      `firmware/<board>/factory_idbloader.bin` byte for byte
+- [ ] `wl` verified **non-destructively**: write a pattern to empty space outside the partitions,
+      read it back, restore the original, confirm the region is as it was
+- [ ] **A full-disk read in one pass**, or the chunk count and stall point it needed. A board whose
+      factory tree downclocks the eMMC is the one to expect trouble from
+- [ ] **A full-disk write**, same question — a stalled write leaves the box unbootable, so this is
+      the claim that matters for restore
+- [ ] Throughput for both recorded in `docs/<board>/board.md`, with whether the rate held
 
 ## Ethernet
 

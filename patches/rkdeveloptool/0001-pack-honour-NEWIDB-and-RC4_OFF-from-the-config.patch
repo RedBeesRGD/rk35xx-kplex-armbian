@@ -1,0 +1,170 @@
+--- a/boot_merger.h
++++ b/boot_merger.h
+@@ -47,6 +47,8 @@
+ #define SEC_472             "[CODE472_OPTION]"
+ #define SEC_LOADER          "[LOADER_OPTION]"
+ #define SEC_OUT             "[OUTPUT]"
++#define SEC_SYSTEM          "[SYSTEM]"
++#define SEC_FLAG            "[FLAG]"
+ 
+ #define OPT_NAME            "NAME"
+ #define OPT_MAJOR           "MAJOR"
+@@ -57,6 +59,9 @@
+ #define OPT_SLEEP           "Sleep"
+ #define OPT_LOADER_NAME     "LOADER"
+ #define OPT_OUT_PATH        "PATH"
++#define OPT_NEWIDB          "NEWIDB"
++#define OPT_RC4_OFF         "RC4_OFF"
++#define OPT_471_RC4_OFF     "471_RC4_OFF"
+ 
+ typedef struct {
+ 	char       name[MAX_LINE_LEN];
+@@ -76,10 +81,14 @@
+ 	int         loaderNum;
+ 	name_entry* loader;
+ 	char        outPath[MAX_LINE_LEN];
++	int         newIDB;
++	int         rc4Off;
++	int         rc4Off471;
+ } options;
+ 
+ 
+ #define TAG						0x544F4F42
++#define TAG_NEW					0x2052444C	/* "LDR ", new IDB */
+ #define MERGER_VERSION          0x01030000
+ #define SMALL_PACKET			512
+ 
+--- a/main.cpp
++++ b/main.cpp
+@@ -1146,10 +1146,12 @@
+ 		}
+ 		if (fscanf(file, OPT_LOADER_NAME "%d=%s", &index, buf)
+ 				!= 2)
++			return false;
++		index--;
++		if (index < 0 || index >= gOpts.loaderNum)
+ 			return false;
+ 		strcpy(gOpts.loader[index].name, buf);
+ 		printf("name%d: %s\n", index, gOpts.loader[index].name);
+-		index++;
+ 	}
+ 	for (i=0; i<gOpts.loaderNum; i++) {
+ 		if (SCANF_EAT(file) != 0) {
+@@ -1215,7 +1217,36 @@
+ 
+ 	fprintf(out, SEC_OUT "\n" OPT_OUT_PATH "=%s\n", gOpts.outPath);
+ }
++
++/* [SYSTEM] and [FLAG] hold KEY=true/false lines. Rockchip's own RKBOOT inis carry them, so parse
++ * them rather than reject the section; keys we do not act on are skipped, not failed. */
++static bool parseFlags(FILE* file) {
++	/* rewind to the end of the last value, never past its newline: the caller's SCANF_EAT needs
++	 * that newline to still be there, and fails at EOF if this ate it. */
++	long pos = ftell(file);
++	char key[MAX_LINE_LEN], val[MAX_LINE_LEN];
+ 
++	while (1) {
++		if (SCANF_EAT(file) != 0) {
++			fseek(file, pos, SEEK_SET);
++			return true;
++		}
++		if (fscanf(file, "%[^=\r\n]=%[^\r\n]", key, val) != 2 || key[0] == '[') {
++			fseek(file, pos, SEEK_SET);
++			return true;
++		}
++		int on = !strcmp(val, "true") || !strcmp(val, "TRUE") || !strcmp(val, "1");
++		if (!strcmp(key, OPT_NEWIDB))
++			gOpts.newIDB = on;
++		else if (!strcmp(key, OPT_RC4_OFF))
++			gOpts.rc4Off = on;
++		else if (!strcmp(key, OPT_471_RC4_OFF))
++			gOpts.rc4Off471 = on;
++		printf("%s=%s\n", key, val);
++		pos = ftell(file);
++	}
++}
++
+ static bool parseOpts(void) {
+ 	bool ret = false;
+ 	bool chipOk = false;
+@@ -1277,6 +1308,11 @@
+ 				printf("parseLoader failed!\n");
+ 				goto end;
+ 			}
++		} else if (!strcmp(buf, SEC_SYSTEM) || !strcmp(buf, SEC_FLAG)) {
++			if (!parseFlags(file)) {
++				printf("parseFlags failed!\n");
++				goto end;
++			}
+ 		} else if (!strcmp(buf, SEC_OUT)) {
+ 			outOk = parseOut(file);
+ 			if (!outOk) {
+@@ -1409,7 +1445,7 @@
+ 	return rkTime;
+ }
+ 
+-static bool writeFile(FILE* outFile, const char* path, bool fix) {
++static bool writeFile(FILE* outFile, const char* path, bool fix, bool rc4) {
+ 	bool ret = false;
+ 	uint32_t size = 0, fixSize = 0;
+ 	uint8_t* buf;
+@@ -1437,7 +1473,8 @@
+ 		buf = gBuf;
+ 		size = fixSize;
+ 		while(1) {
+-			P_RC4(buf, fixSize < SMALL_PACKET ? fixSize : SMALL_PACKET);
++			if (rc4)
++				P_RC4(buf, fixSize < SMALL_PACKET ? fixSize : SMALL_PACKET);
+ 			buf += SMALL_PACKET;
+ 			if (fixSize <= SMALL_PACKET)
+ 				break;
+@@ -1447,7 +1484,8 @@
+ 		uint32_t tmp = size % ENTRY_ALIGN;
+ 		tmp = tmp ? (ENTRY_ALIGN - tmp): 0;
+ 		size +=tmp;
+-		P_RC4(gBuf, size);
++		if (rc4)
++			P_RC4(gBuf, size);
+ 	}
+ 
+ 	if (!fwrite(gBuf, size, 1, outFile))
+@@ -1545,7 +1583,7 @@
+ 
+ static inline void getBoothdr(rk_boot_header* hdr) {
+ 	memset(hdr, 0, sizeof(rk_boot_header));
+-	hdr->tag = TAG;
++	hdr->tag = gOpts.newIDB ? TAG_NEW : TAG;
+ 	hdr->size = sizeof(rk_boot_header);
+ 	hdr->version = (getBCD(gOpts.major) << 8) | getBCD(gOpts.minor);
+ 	hdr->mergerVersion = MERGER_VERSION;
+@@ -1564,7 +1602,7 @@
+ 	hdr->loaderOffset = hdr->code472Offset + gOpts.code472Num * hdr->code472Size;
+ 	hdr->loaderSize = sizeof(rk_boot_entry);
+ #ifndef USE_P_RC4
+-	hdr->rc4Flag = 1;
++	hdr->rc4Flag = gOpts.rc4Off ? 0 : 1;
+ #endif
+ }
+ 
+@@ -1647,17 +1685,18 @@
+ 
+ 	printf("Writing code 471...\n");
+ 	for (i=0; i<gOpts.code471Num; i++) {
+-		if (!writeFile(outFile, (char*)gOpts.code471Path[i], false))
++		if (!writeFile(outFile, (char*)gOpts.code471Path[i], false,
++					!gOpts.rc4Off471 && !gOpts.rc4Off))
+ 			goto end;
+ 	}
+ 	printf("Writing code 472...\n");
+ 	for (i=0; i<gOpts.code472Num; i++) {
+-		if (!writeFile(outFile, (char*)gOpts.code472Path[i], false))
++		if (!writeFile(outFile, (char*)gOpts.code472Path[i], false, !gOpts.rc4Off))
+ 			goto end;
+ 	}
+ 	printf("Writing loader...\n");
+ 	for (i=0; i<gOpts.loaderNum; i++) {
+-		if (!writeFile(outFile, gOpts.loader[i].path, true))
++		if (!writeFile(outFile, gOpts.loader[i].path, true, !gOpts.rc4Off))
+ 			goto end;
+ 	}
+ 	fflush(outFile);

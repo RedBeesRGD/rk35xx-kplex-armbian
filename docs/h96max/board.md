@@ -244,6 +244,23 @@ driver question, not a device-tree one, and what stands between this board and S
 
 ## Recovery
 
+❌ **The recovery button does not reach maskrom on `firmware/common/uboot.itb`** — it is an
+`adc-keys` entry read by U-Boot, and that FIT has no ADC, so nothing answers it. Fixed by shipping
+this board's own FIT. **The OTG port is the USB 3 port.** ✅ Everything past entry is proven — see
+the throughput table below. It has an SD slot, so a bad DTB is still recoverable by booting an SD;
+otherwise the way in is serial + `ctrl+b`. Procedure in `docs/maskrom.md`.
+
+**Measured over maskrom, 2026-09-12** — one pass each way, all 30777344 sectors, no degradation in
+either direction:
+
+| Direction    | Throughput | Full pass                                            |
+| ------------ | ---------- | ---------------------------------------------------- |
+| read (`rl`)  | 25.4 MB/s  | ✅ 15.76 GB, byte-identical to the 2026-08-07 backup |
+| write (`wl`) | 14.6 MB/s  | ✅ 15.76 GB in 1083 s, spot-verified against it      |
+
+The eMMC here is untouched factory Android — Armbian runs from the SD — so that write was a
+restore-to-stock, and the box booted clean afterwards with no filesystem errors.
+
 To rewrite the loader pair by hand, **find the eMMC first**: `mmcblk` numbering shifts between
 images, and the eMMC is the disk with `boot0`/`boot1` companions.
 

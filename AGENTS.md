@@ -46,6 +46,7 @@ another, so nothing rots when one is rewritten.
 | `docs/mpp.md`                         | reaching the video engines; the codec test commands                   |
 | `docs/armbian-install.md`             | the factory reserved window: what survives a migration, what does not |
 | `docs/uboot.md`                       | the bootloader pair: what we build, what stays factory, why           |
+| `docs/maskrom.md`                     | the USB service modes: entry, the 32 MiB Loader trap, backup, restore |
 | `docs/apt-upgrade.md`                 | the hooks and the hold that keep the overlay alive across upgrades    |
 | `docs/watchdog.md`                    | why it cannot be stopped, and why a soft reboot can strand the box    |
 | `docs/todo/`                          | open questions — `rk35xx-` is family-wide, `<board>-` is one box      |
@@ -56,6 +57,7 @@ another, so nothing rots when one is rewritten.
 | `docs/r69/upstream.md`                | what the two closed upstream submissions established, and why         |
 | `upstream/README.md`                  | turning the grafts into something upstreamable                        |
 | `patches/dtc/README.md`               | the patched `dtc` that round-trips a vendor blob with `&label`s       |
+| `patches/rkdeveloptool/README.md`     | the patched `pack`; why the stock one cannot build a usable loader    |
 | `patches/e2tools/README.md`           | the patched `e2tools`; why the stock one corrupts an image on delete  |
 | `patches/linux-rockchip/README.md`    | the kernel fixes and their PRs; why an overlay box cannot apply them  |
 | `patches/seekwave-swt6621s/README.md` | the H96 Max Wi-Fi driver patches and their PRs                        |
