@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Build each board's uboot.itb into firmware/<board>/, from pinned mainline U-Boot + ATF.
-# `./build-uboot.sh common` rebuilds the shared firmware/common/uboot.itb from the generic tree.
 # The control DT lives inside the FIT, so a per-board tree means a per-board FIT.
 set -euo pipefail
 
@@ -17,9 +16,8 @@ BL31="bin/rk35/rk3528_bl31_v1.21.elf"            # ATF (EL3 secure monitor); rec
 TPL="bin/rk35/rk3528_ddr_1056MHz_v1.13.bin"      # mainline binman needs a TPL to assemble its image; the FIT we extract is TPL-independent
 BASE_DEFCONFIG="generic-rk3528_defconfig"        # ours is this, plus the board DT and the ADC
 
-# Default to the boards that ship their own loader. The rest stay on firmware/common/uboot.itb,
-# so building a FIT for them would only produce an artifact nothing installs. Naming a board
-# explicitly still builds it — that is how a per-board loader gets tried before it is wired up.
+# Default to the boards whose board.conf installs a FIT of their own. Naming a board explicitly
+# still builds it — that is how a per-board loader gets tried before it is wired up.
 boards() {
   for c in "$FW"/*/board.conf; do
     b=$(basename "$(dirname "$c")")
@@ -31,7 +29,7 @@ boards() {
 
 BOARDS="${*:-$(boards)}"
 [ -n "$BOARDS" ] ||
-  { echo "no board ships its own uboot.itb — pass 'common' or a board name"; exit 1; }
+  { echo "no board ships its own uboot.itb — name a board"; exit 1; }
 # native gcc on arm64, cross prefix otherwise
 if [ "$(uname -m)" = aarch64 ] && ! command -v aarch64-linux-gnu-gcc >/dev/null; then
   : "${CROSS_COMPILE:=}"; else : "${CROSS_COMPILE:=aarch64-linux-gnu-}"; fi
@@ -39,9 +37,8 @@ export CROSS_COMPILE ARCH=arm64
 command -v "${CROSS_COMPILE}gcc" >/dev/null || { echo "Missing ${CROSS_COMPILE}gcc toolchain"; exit 1; }
 
 for b in $BOARDS; do
-  [ "$b" = common ] && continue     # the shared FIT is the generic build, it has no board tree
-    [ -f "$FW/$b/uboot.dts" ] ||
-      { echo "No firmware/$b/uboot.dts — generate it first: ./build-uboot-dts.sh $b"; exit 1; }
+  [ -f "$FW/$b/uboot.dts" ] ||
+    { echo "No firmware/$b/uboot.dts — generate it first: ./build-uboot-dts.sh $b"; exit 1; }
 done
 
 mkdir -p "$BUILD"; cd "$BUILD"
@@ -64,16 +61,18 @@ cd u-boot
 [ -e .config ] && make mrproper >/dev/null
 
 for BOARD in $BOARDS; do
-  # `common` is the shared FIT the boards without their own still boot: mainline's generic tree,
-  # unpatched. Buildable by name so a pin bump can reach it.
-  if [ "$BOARD" = common ]; then
-    O="$BUILD/out-common"
-    make O="$O" "$BASE_DEFCONFIG" >/dev/null
-    make O="$O" -j"$(nproc)" BL31="$BUILD/rkbin/$BL31" ROCKCHIP_TPL="$BUILD/rkbin/$TPL"
-    cp "$O/u-boot.itb" "$FW/common/uboot.itb"
-    echo "-> firmware/common/uboot.itb ($(wc -c < "$FW/common/uboot.itb") bytes)"
-    continue
+  # The FIT embeds a timestamp: pin it to the source it is built from, or a pre-push check cannot
+  # tell drift from noise.
+  SRC="$FW/$BOARD/uboot.dts"
+  SOURCE_DATE_EPOCH=$(git -C "$REPO" log -1 --format=%ct -- "$SRC" 2>/dev/null || true)
+  if [ -z "$SOURCE_DATE_EPOCH" ]; then
+    # An uncommitted tree has no commit date. mtime holds this checkout steady, but nobody else can
+    # reproduce it, and committing the tree moves the stamp — rebuild once more after that commit.
+    echo "   $BOARD/uboot.dts is uncommitted: stamping from mtime, rebuild once it is committed"
+    # stat differs between GNU and BSD
+    SOURCE_DATE_EPOCH=$(stat -c %Y "$SRC" 2>/dev/null || stat -f %m "$SRC" 2>/dev/null || echo 0)
   fi
+  export SOURCE_DATE_EPOCH
 
   DT="rk3528-$BOARD"
   cp "$FW/$BOARD/uboot.dts" "arch/arm/dts/$DT.dts"

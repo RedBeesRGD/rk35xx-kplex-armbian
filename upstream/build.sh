@@ -17,9 +17,8 @@ DTS_DIR=${DTS_DIR:-$KERNEL/arch/arm64/boot/dts}
 
 set -ex
 
-[ -x tools/dtc/dtc ] || { echo "Need patched dtc. Run: ./build-dtc.sh"; exit 1; }
-
 cd "$(dirname "$0")/.."
+[ -x tools/dtc/dtc ] || { echo "Need patched dtc. Run: ./build-dtc.sh"; exit 1; }
 B=upstream/$BOARD
 DTC=tools/dtc/dtc
 cpp_dts() { cc -E -nostdinc -undef -D__DTS__ -x assembler-with-cpp -I "$KERNEL/include" -I "$DTS_DIR" -I "$DTS_DIR/rockchip" "$1" -o "$2"; }
@@ -30,24 +29,8 @@ cp $B/board.dts $B/armbian.dts
 patch -s $B/armbian.dts < firmware/$STOCK/board.patch
 $DTC -@ -I dts -O dtb -o $B/armbian.dtb $B/armbian.dts 2>/dev/null
 
-# The overlay ships firmware/<board>/board.dtb, which may deliberately differ from the submission:
-# a downstream workaround for a kernel fix that has not merged yet. Never overwrite it silently.
-set +x
-# compare the .dts too: a comment-only edit leaves the dtb identical, and those comments are
-# the documentation board.dts carries
-if cmp -s $B/armbian.dtb firmware/$STOCK/board.dtb && cmp -s $B/armbian.dts firmware/$STOCK/board.dts; then
-	echo "firmware/$STOCK: matches the submission"
-elif [ "${SYNC:-0}" = 1 ]; then
-	cp $B/armbian.dts firmware/$STOCK/board.dts
-	cp $B/armbian.dtb firmware/$STOCK/board.dtb
-	echo "firmware/$STOCK: synced from the submission"
-else
-	echo "firmware/$STOCK: DIFFERS from the submission, left alone (SYNC=1 to overwrite)"
-	diff <($DTC -I dtb -O dts -s $B/armbian.dtb 2>/dev/null) \
-	     <($DTC -I dtb -O dts -s firmware/$STOCK/board.dtb 2>/dev/null) \
-	  | grep -E '^[<>]' | sed 's/^/    /' | head -20 || true
-fi
-set -x
+# firmware/<board>/board.dts and board.dtb are not written here — ./build-board-dts.sh owns them,
+# from the same stock blob and board.patch. This script only produces the submission set.
 
 if [ ! -d "$BINDINGS" ]; then
 	git init -q "$KERNEL"

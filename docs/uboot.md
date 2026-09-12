@@ -14,11 +14,10 @@ Per-board U-Boot is built from the box's own factory tree, but **swapping a runn
 one that has never booted is not a free change**, so it is enabled per board rather than
 family-wide.
 
-`board.conf` decides: `BOARD_UBOOT=<board>/uboot.itb` ships that board's own FIT,
-`BOARD_UBOOT=common/uboot.itb` boots the shared one. The shared FIT is **mainline's `rk3528-generic`
-tree, unpatched** — no board DT and no `CONFIG_ADC`, so on a board that boots it the recovery button
-does not reach Maskrom from U-Boot. Which one a board uses, and whether it has ever booted its own,
-belongs in that board's `board.md`.
+`board.conf` decides: `BOARD_UBOOT=<board>/uboot.itb` ships that board's own FIT. Every board here
+has one — a shared FIT built from mainline's `rk3528-generic` tree carries no board DT and no
+`CONFIG_ADC`, so the recovery button cannot reach Maskrom from U-Boot on it. Whether a board has
+ever booted its own belongs in that board's `board.md`.
 
 **Nothing per-board is kept for a board that has never booted a build of its own** — no graft, no
 tree. With no arguments `build-uboot.sh` builds only the boards whose `board.conf` names their own
@@ -176,9 +175,8 @@ rebuild changed nothing.
 ## Rebuilding
 
 ```sh
-./build-uboot.sh                    # Linux; boards that ship their own, scratch in uboot-build/
-./build-uboot.sh <board> [<board>…]   # macOS: ./build-uboot-finch.sh, same arguments
-./build-uboot.sh common             # the shared firmware/common/uboot.itb, from the generic tree
+./build-firmware-all.sh               # every board's tree and FIT, then reports what moved
+./build-uboot.sh [<board>…]           # the FIT alone; macOS: ./build-uboot-finch.sh, same arguments
 
 strings -a firmware/<board>/uboot.itb | grep -E 'bl31-v|fdt-rk3528'   # identify a suspect blob
 # bl31-v1.21 / fdt-rk3528-<board>
