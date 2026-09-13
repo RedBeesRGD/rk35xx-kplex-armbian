@@ -132,7 +132,7 @@ migrate() {
 }
 migrate
 
-echo "[1/5] installing firmware payload ($BOARD)"
+echo "[1/6] installing firmware payload ($BOARD)"
 while read -r mode src dest; do
   case "$mode" in ''|\#*) continue ;; esac
   # one payload entry is this script: truncating the inode the shell is reading resumes it mid-token.
@@ -143,7 +143,7 @@ while read -r mode src dest; do
 done < "$FW/$BOARD_PAYLOAD"
 "/usr/local/sbin/$P-boardname"   # re-assert the login-banner name (apt upgrades reset it)
 
-echo "[2/5] refreshing DKMS driver sources + rebuilding"
+echo "[2/6] refreshing DKMS driver sources + rebuilding"
 # a board with no IR receiver ships neither the Makefile nor dkms.conf that the fetch needs
 if [ -f "$DKMS_IR/dkms.conf" ]; then "$FW/common/fetch-dkms-src.sh" "$DKMS_IR"; fi
 
@@ -167,10 +167,44 @@ for e in ${BOARD_DKMS_FETCH:-}; do
   dkms_rebuild "$d"
 done
 
-echo "[3/5] installing the DTB into the running kernel"
+echo "[3/6] installing the DTB into the running kernel"
 "/etc/kernel/postinst.d/$P-dtb-persist" "$(uname -r)"
 
-echo "[4/5] reloading systemd + restarting changed services"
+echo "[4/6] checking the U-Boot FIT on the boot device"
+# Only uboot.itb. The idbloader at sector 64 stays factory: its DDR tuning is the one thing no
+# rebuild reproduces, and a bad one costs a maskrom recovery. A bad FIT does not — TPL/SPL still
+# run, so ctrl+b and the recovery button both survive it.
+UBOOT_SEEK=16384         # the uboot partition is two slots; build-image.sh writes the same two
+UBOOT_SLOT_SECTORS=4096
+UBOOT_COPIES=2
+update_uboot() {
+  src="$SHARE/uboot.itb"
+  [ -f "$src" ] || { echo "  this board ships no uboot.itb"; return 0; }
+  # mmcblk numbering moves between boots, so resolve the disk now rather than remember one
+  dev="/dev/$(lsblk -no PKNAME "$(findmnt -no SOURCE /)" 2>/dev/null)"
+  [ -b "$dev" ] || { echo "  cannot resolve the disk / is on — skipped"; return 0; }
+  [ "$(od -An -tx1 -N4 "$src" | tr -d ' \n')" = d00dfeed ] ||
+    { echo "  $src is not a FIT — skipped"; return 0; }
+  bytes=$(wc -c < "$src")
+  [ "$bytes" -le $((UBOOT_SLOT_SECTORS * 512)) ] ||
+    { echo "  $src is $bytes bytes, past the slot — skipped"; return 0; }
+
+  slot() { dd if="$dev" bs=512 skip="$1" count="$UBOOT_SLOT_SECTORS" 2>/dev/null | head -c "$bytes" | md5sum; }
+  want=$(md5sum < "$src")
+  i=0
+  while [ "$i" -lt "$UBOOT_COPIES" ]; do
+    at=$((UBOOT_SEEK + i * UBOOT_SLOT_SECTORS)); i=$((i + 1))
+    [ "$(slot "$at")" = "$want" ] && { echo "  slot $at already current"; continue; }
+    # clear first, or the tail of a longer predecessor survives behind a shorter blob
+    dd if=/dev/zero of="$dev" bs=512 seek="$at" count="$UBOOT_SLOT_SECTORS" conv=notrunc status=none
+    dd if="$src"    of="$dev" bs=512 seek="$at" conv=notrunc,fsync status=none
+    [ "$(slot "$at")" = "$want" ] && echo "  slot $at written and verified" ||
+      echo "  slot $at VERIFY FAILED"
+  done
+}
+update_uboot
+
+echo "[5/6] reloading systemd + restarting changed services"
 systemctl daemon-reload
 # udev reads only the compiled hwdb.bin; skip the rebuild on boards that ship no keymap
 [ -n "$(ls -A /etc/udev/hwdb.d 2>/dev/null)" ] && systemd-hwdb update || true
@@ -182,7 +216,7 @@ for s in ${BOARD_UPDATE_RESTART:-}; do systemctl restart "$s" 2>/dev/null || tru
 for s in ${BOARD_UPDATE_TRY_RESTART:-}; do systemctl try-restart "$s" 2>/dev/null || true; done
 echo "  (power-key / suspend drop-ins take effect after 'systemctl restart systemd-logind' or a reboot)"
 
-echo "[5/5] done"
+echo "[6/6] done"
 if [ "$OLD_DTB" != "$(dtbsum)" ]; then
   echo "device tree changed — a reboot is required to load it."
   case "$REBOOT" in
