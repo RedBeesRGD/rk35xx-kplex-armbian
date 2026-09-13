@@ -58,7 +58,7 @@ comment; `r69/dtb.md` records why and the condition that ends it.
 ## Our U-Boot cannot read `LAN_MAC` at all
 
 ✅ Verified against the shipped blob and the build tree. Vendor storage is a Rockchip downstream
-driver; we build **mainline**, which has none — `strings` on `firmware/common/uboot.itb` finds no
+driver; we build **mainline**, which has none — `strings` on `firmware/r69/uboot.itb` finds no
 `vendor_storage`, no `LAN_MAC`, no `rockchip_set_ethaddr`.
 
 So `end0` is handed `local-mac-address` from mainline's `rockchip_setup_macaddr()`

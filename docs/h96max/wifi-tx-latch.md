@@ -50,9 +50,8 @@ want of an HE downlink; whether the fault occurs there is untested.
 A flow marked VI (`0xa0`) never sees the latch — 58.4 Mbit/s on VI against 3.53 on BE, same link,
 same second — and it is the correct marking for video anyway. Useful on an unpatched driver.
 
-`seekwave-latch-watchdog.sh` is a **last resort**: it detects the latch and re-associates (verified,
-5.94 → 99.8 Mbit/s), but re-association drops the link for 0.2–0.3 s on 5 GHz and 3.1–3.5 s on 2.4
-GHz.
+**Re-associating is the last resort**: it clears the latch (5.94 → 99.8 Mbit/s), but drops the link
+for 0.2–0.3 s on 5 GHz and 3.1–3.5 s on 2.4 GHz. Nothing here ships to do it automatically.
 
 ## Reproduce
 

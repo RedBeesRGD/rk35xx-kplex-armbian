@@ -1,9 +1,9 @@
 # Board validation — criteria of done
 
-The gate a board passes before it ships. Every line gets **✅ verified · 🟡 likely (proven on a
-sibling, or a cheap check settles it) · ❓ never tested · ❌ broken · ➖ not on this box**, numbers
-and reasons in `docs/<board>/board.md`. Blank is not an answer; nothing is inherited from a sibling
-board.
+The gate a board passes before it ships. Every line gets **✅ verified · 🟡 likely (a proven
+mechanism backs it, nothing indicates a problem) · ❓ never tested · ❌ broken · ➖ not on this
+box**, numbers and reasons in `docs/<board>/board.md`. Blank is not an answer; nothing is inherited
+from a sibling board.
 
 Run every unattended check before asking the human for anything, then hand them one batched list.
 Risk order: SDIO Wi-Fi, the Ethernet PHY, the video codec, anything the DTB touched.

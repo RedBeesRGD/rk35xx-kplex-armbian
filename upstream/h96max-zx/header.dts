@@ -14,8 +14,13 @@
  *                      filenames from it; rk3528a last, as rkmpp has no rk3518 entry
  *                      and cannot otherwise find the VPU
  *   model              name the box, keeping the vendor string
+ *   reboot-mode        mode-maskrom added, so `reboot maskrom` from the OS reaches the
+ *                      BootROM; the factory SPL reads the register on the way up
  *   gpu@ff700000       interrupt-names and clocks in the form mainline lima expects,
  *                      not the vendor Mali blob's
+ *   vop@ff840000       esmart_lb_mode 03 -> 02, giving Esmart0 a 4K line buffer. At 03
+ *                      every Esmart window gets 2K, so a 3840-wide mode fetches half a
+ *                      line and the rest is whatever the buffer held
  *   serial@ff9f0000    enabled with uart0m0_xfer, for the ttyS0 console
  *   pwm@ffa90030       remote_support_psci 0 -> 1, so the remote wakes the box
  *   watchdog@ffac0000  enabled, for systemd's RuntimeWatchdogSec

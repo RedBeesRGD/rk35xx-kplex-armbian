@@ -74,8 +74,9 @@ another, so nothing rots when one is rewritten.
 Five states, meaning exactly what they say:
 
 - **✅ verified here** — run on this box, with the number or output to show for it.
-- **🟡 likely** — not verified here, but there is a reason: the mechanism is proven on a sibling
-  board, or a cheap check settles it.
+- **🟡 likely** — not verified here, but something proven backs it and nothing indicates a problem:
+  the same mechanism ✅ on a sibling board with no sign the boards differ, or a ✅ layer beneath it
+  that we do not touch.
 - **❓ never tested** — nobody has looked, and nothing predicts the answer.
 - **❌ tested and broken.**
 - **➖ not present on this box.**
@@ -91,6 +92,10 @@ cannot be backed, say so rather than rounding up.
 
 - **Docs are updated in the same pass as the change.** Work isn't done when the box works; it's done
   when the docs say what the box does. A doc that contradicts the repo is worse than no doc.
+- **`upstream/<board>/header.dts` lists exactly what that board's `board.patch` changes** — no more,
+  no less. It is the submission's only account of why the tree departs from the factory blob: a
+  missing entry reads as an unexplained change, and an entry inherited from another board claims a
+  change this one never makes.
 - **Docs do not link to each other.** Name a file in plain text if a reader needs it. The index
   above is the only place that points anywhere.
 - **Worklogs are written as work happens** — dated entries, wrong turns included. They are the raw

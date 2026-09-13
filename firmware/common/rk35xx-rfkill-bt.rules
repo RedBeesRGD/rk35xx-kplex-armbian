@@ -1,3 +1,2 @@
-# Rockchip's rfkill-bt registers the radio soft-blocked (Android's model).
-# add only: a change event is the user blocking it, and undoing that would make BT unturnoffable.
+# Rockchip registers the radio soft-blocked; add only, or this would fight the user blocking it.
 SUBSYSTEM=="rfkill", ACTION=="add", ATTR{type}=="bluetooth", ATTR{soft}="0"

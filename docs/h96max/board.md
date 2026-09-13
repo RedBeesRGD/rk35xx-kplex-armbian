@@ -177,8 +177,9 @@ box.
 
 ## Toothpick button
 
-An `adc-keys` input: `KEY_VOLUMEUP` on its own event node, free to remap. Held at power-on it is the
-BootROM's maskrom trigger.
+Recessed **inside the AV jack** — a toothpick reaches it through the socket. An `adc-keys` input:
+`KEY_VOLUMEUP` on its own event node, free to remap. Held at power-on it is the BootROM's maskrom
+trigger.
 
 ## HDMI on a PC monitor
 
@@ -216,10 +217,15 @@ the rootfs fine but no Wi-Fi, because the Seekwave driver gave up waiting for it
 Which symptom appears depends on which `dwmmc` slot loses the race after a warm reset: SD loses and
 there is no root, SDIO loses and there is no Wi-Fi. The `sdhci` eMMC is never affected.
 
-❌ **The Wi-Fi half is unmitigated in the shipped image.** Raising the driver's 1 s wait for its
-SDIO card to 10 s — enough to cover the mmc core's 400k/300k/200k/minimum retry ladder — did fix it:
-**15 consecutive warm reboots** (2026-08-15, 5 + 10 runs), every one a fresh `boot_id`, `wlan0` up,
-zero `wait scan card time out`. But that patch was against the Armbian build tree in the now-closed
+🟡 **The Wi-Fi half has not recurred since the UHS strip, and nobody traced why.** The two symptoms
+share a root cause, so slowing the SD slot plausibly changed the race for the SDIO slot too — but
+that is inference, not a trace, and the driver's 1 s wait is untouched. Treat it as unexplained
+rather than fixed.
+
+❌ **The driver-side fix is not shipped.** Raising the driver's 1 s wait for its SDIO card to 10 s —
+enough to cover the mmc core's 400k/300k/200k/minimum retry ladder — did fix it: **15 consecutive
+warm reboots** (2026-08-15, 5 + 10 runs), every one a fresh `boot_id`, `wlan0` up, zero
+`wait scan card time out`. But that patch was against the Armbian build tree in the now-closed
 `armbian/build#10440`. The overlay stages the pinned upstream driver unmodified, and commit
 `b1b15016` still waits `msecs_to_jiffies(1000)` in `skw_sdio_scan_card()`. Carrying it here is the
 open item in `todo/rk35xx-sd-uhs-warm-reset.md`.
@@ -249,11 +255,11 @@ driver question, not a device-tree one, and what stands between this board and S
 
 ## Recovery
 
-❌ **The recovery button does not reach maskrom on `firmware/common/uboot.itb`** — it is an
-`adc-keys` entry read by U-Boot, and that FIT has no ADC, so nothing answers it. Fixed by shipping
-this board's own FIT. **The OTG port is the USB 3 port.** ✅ Everything past entry is proven — see
-the throughput table below. It has an SD slot, so a bad DTB is still recoverable by booting an SD;
-otherwise the way in is serial + `ctrl+b`. Procedure in `docs/maskrom.md`.
+**The recovery button is an `adc-keys` entry read by U-Boot**, so it answers only on a FIT with the
+ADC enabled — which is why this board ships its own. **The OTG port is the USB 3 port.** ✅
+Everything past entry is proven — see the throughput table below. It has an SD slot, so a bad DTB is
+still recoverable by booting an SD; otherwise the way in is serial + `ctrl+b`. Procedure in
+`docs/maskrom.md`.
 
 **Measured over maskrom, 2026-09-12** — one pass each way, all 30777344 sectors, no degradation in
 either direction:

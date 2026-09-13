@@ -274,8 +274,8 @@ U-Boot's `adc-keys` sees it and resets into BootROM download. `db` with `rk3528_
 then `rfi` (30777344 sectors) and `rl` — a read of sector 64 came back byte-identical to
 `firmware/r69/factory_idbloader.bin`, and slot A read over USB matched the FIT written over ssh.
 
-❌ **It does not work on `firmware/common/uboot.itb`**, which has no ADC — nothing reads the button.
-The button is only as alive as the U-Boot in slot A.
+The button is only as alive as the U-Boot in slot A: it needs a FIT with the ADC enabled, which is
+why this board ships its own.
 
 **The OTG port is the USB 3 port.** Use an **A male-to-male** cable; this box has only USB-A ports,
 so add an A-female→C adapter at the host end if that host is USB-C only. Modes and the restore

@@ -20,11 +20,11 @@ list. It matters because a box with no card slot has no SD rescue, so maskrom is
    too. That is the case that matters: a read stall costs a chunk, a write stall leaves the box
    unbootable until it finishes.
 
-3. **A board on `firmware/common/uboot.itb` has no button route.** ❌ Confirmed 2026-09-12 on the
-   H96 Max: the button is an `adc-keys` entry read by U-Boot, and the mainline FIT has no ADC. Fixed
-   by shipping that board's own FIT — ✅ done for the R69 the same day, which then reached `Maskrom`
-   on the button and passed `db`/`rfi`/`rl`. 🟡 The H96 Max has its FIT built but not yet flashed.
-   Per-board ports: ✅ 3518D USB-C, bus-powered from the host; ✅ R69 the USB 3 port.
+3. ~~**A board on the shared mainline FIT has no button route.**~~ **Answered — and removed.** The
+   button is an `adc-keys` entry read by U-Boot and the mainline FIT had no ADC. Every board now
+   ships its own FIT with the ADC on and the shared one is deleted, so the case cannot recur. ✅ The
+   R69 reached `Maskrom` on the button and passed `db`/`rfi`/`rl`. Per-board ports: ✅ 3518D USB-C,
+   bus-powered from the host; ✅ R69 the USB 3 port.
 
 4. ~~**Is the R69's `Maskrom` usable?**~~ **Answered ✅ 2026-09-12** — `db`, `rfi` and `rl` all
    work; a read of sector 64 matched `firmware/r69/factory_idbloader.bin` byte for byte. `wl` is
