@@ -145,6 +145,11 @@ cannot be backed, say so rather than rounding up.
 - **History belongs in `worklog.md`.** A **date on a claim is evidence, not history**:
   `✅ measured 2026-08-20` belongs.
 
+## Commits
+
+**A title. A paragraph only where it earns its place** — something a reader cannot get from the
+diff. The diff is the record; reasoning belongs in the comment, the doc, or the todo it came from.
+
 ## Code
 
 Less code is better. Communicate through names, not comments: comment a non-obvious _why_ only,

@@ -255,11 +255,11 @@ driver question, not a device-tree one, and what stands between this board and S
 
 ## Recovery
 
-**The recovery button is an `adc-keys` entry read by U-Boot**, so it answers only on a FIT with the
-ADC enabled — which is why this board ships its own. **The OTG port is the USB 3 port.** ✅
-Everything past entry is proven — see the throughput table below. It has an SD slot, so a bad DTB is
-still recoverable by booting an SD; otherwise the way in is serial + `ctrl+b`. Procedure in
-`docs/maskrom.md`.
+✅ **The recovery button reaches `Maskrom`**, held before power. It is an `adc-keys` entry read by
+U-Boot, so it answers only on a FIT with the ADC enabled — which is why this board ships its own.
+**The OTG port is the USB 3 port.** ✅ Everything past entry is proven — see the throughput table
+below. It has an SD slot, so a bad DTB is still recoverable by booting an SD; otherwise the way in
+is serial + `ctrl+b`. Procedure in `docs/maskrom.md`.
 
 **Measured over maskrom, 2026-09-12** — one pass each way, all 30777344 sectors, no degradation in
 either direction:
