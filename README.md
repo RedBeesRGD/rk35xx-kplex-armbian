@@ -1,82 +1,93 @@
 # Armbian for RK35xx TV boxes
 
-Debian on a **$35 RK3518 Android TV box** — silent, fanless, PSU and HDMI cable and IR/Bluetooth
-remote included.
+Debian on a **$35 RK3518 Android TV box** — silent, fanless, cables and a remote in the box.
 
-Everything board-specific — factory DDR bootloader, device tree, DKMS drivers, boot fixups — is
-sideloaded into a stock **[Armbian ROCK 2F](https://www.armbian.com/rock-2f/)** image, which already
-runs the RK3528-family kernel. Armbian needs no board of its own, and the result keeps taking kernel
-and userspace updates from `apt upgrade` like any supported board.
+A stock Armbian image already runs the RK3528-family kernel, so everything board-specific — factory
+bootloader, device tree, DKMS drivers, boot fixups — is sideloaded into it. Nothing is forked, so
+`apt upgrade` keeps updating the kernel and userspace.
 
 ## Boxes
 
-|            | **R69**                                     | **H96 Max** "H313"                             |
-| ---------- | ------------------------------------------- | ---------------------------------------------- |
-| Box        | <img src="docs/r69/image1.jpg" width="300"> | <img src="docs/h96max/image1.jpg" width="300"> |
-| Board      | <img src="docs/r69/board.jpg" width="300">  | <img src="docs/h96max/board.jpg" width="300">  |
-| Board key  | `r69`                                       | `h96max`                                       |
-| Silkscreen | `XR821_V1.1`                                | `3518_ZX_V01 20250818`                         |
-| SoC        | RK3518                                      | RK3518                                         |
-| RAM        | 2 GB (1.5 GB usable)                        | 2 GB                                           |
-| eMMC       | 16 GB Samsung                               | 16 GB Micron                                   |
-| Wi-Fi / BT | AIC8800D80                                  | Seekwave SWT6621S                              |
-| Details    | [board doc][r69]                            | [board doc][h96]                               |
+|            | **R69**                                     | **H96 Max H313**                               | **H96 Max 3518D**                                    |
+| ---------- | ------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------- |
+| Box        | <img src="docs/r69/image1.jpg" width="300"> | <img src="docs/h96max/image1.jpg" width="300"> | <img src="docs/h96max-3518d/image1.png" width="300"> |
+| Board      | <img src="docs/r69/board.jpg" width="300">  | <img src="docs/h96max/board.jpg" width="300">  | <img src="docs/h96max-3518d/board.jpg" width="300">  |
+| Board key  | `r69`                                       | `h96max`                                       | `h96max-3518d`                                       |
+| Silkscreen | `XR821_V1.1`                                | `3518_ZX_V01 20250818`                         | `3518_DG_ZX_V01 20250401`                            |
+| SoC        | RK3518                                      | RK3518                                         | RK3518                                               |
+| RAM        | 2 GB (1.5 GB usable)                        | 2 GB                                           | 2 GB                                                 |
+| eMMC       | 16 GB Samsung                               | 16 GB Micron                                   | 16 GB Micron, **no SD slot**                         |
+| USB        | USB-A 3.0 (OTG) + USB-A 2.0                 | USB-A 3.0 (OTG) + USB-A 2.0                    | USB-C 2.0 (OTG) + USB-A 2.0                          |
+| Ethernet   | 10/100                                      | 10/100                                         | **none**                                             |
+| Wi-Fi / BT | AIC8800D80                                  | Seekwave SWT6621S                              | Seekwave SWT6621S                                    |
+| Base image | [Armbian ROCK 2F][rock2f]                   | [Armbian ROCK 2F][rock2f]                      | [Armbian ROCK 2F][rock2f]                            |
+| Install    | SD + Maskrom                                | SD + Maskrom                                   | Maskrom only                                         |
+| Details    | [board doc][r69]                            | [board doc][h96]                               | [board doc][h96d]                                    |
 
 [r69]: docs/r69/board.md
 [h96]: docs/h96max/board.md
+[h96d]: docs/h96max-3518d/board.md
+[rock2f]: https://www.armbian.com/rock-2f/
 
 ## What works
 
-Per box, never inherited from the other. ✅ tested here · 🟡 untested · ❌ broken · ➖ not on this
-board. Measured numbers behind each ✅ are in the board docs.
+| Mark | Means                                                                |
+| :--: | -------------------------------------------------------------------- |
+|  ✅  | tested here — the measured number behind it is in that board's doc   |
+|  🟡  | likely — a proven mechanism backs it and nothing indicates a problem |
+|  ❓  | never tested                                                         |
+|  ❌  | broken                                                               |
+|  ➖  | not on this board                                                    |
 
-| Hardware                                    | R69 | H96 Max |
-| ------------------------------------------- | :-: | :-----: |
-| **Storage**                                 |     |         |
-| eMMC — boot and rootfs                      | ✅  |   ✅    |
-| microSD — boot and rootfs                   | ✅  |   ✅    |
-| microSD hotplug                             | 🟡  |   🟡    |
-| USB 2.0                                     | ✅  |   ✅    |
-| USB 3.0 — 5 Gbps, `uas`                     | ✅  |   ✅    |
-| USB bus power for a self-spinning drive     | 🟡  |   🟡    |
-| **Network**                                 |     |         |
-| Ethernet 10/100                             | ✅  |   ✅    |
-| Wi-Fi 2.4 GHz                               | ✅  |   ✅    |
-| Wi-Fi 5 GHz                                 | ✅  |   ✅    |
-| Bluetooth                                   | ✅  |   ✅    |
-| Wake-on-LAN                                 | ➖  |   ➖    |
-| **Display and video**                       |     |         |
-| HDMI video and audio                        | ✅  |   ✅    |
-| HDMI 4K60, EDID mode list, hotplug          | 🟡  |   🟡    |
-| HDMI-CEC                                    | 🟡  |   🟡    |
-| AV jack — composite video and audio         | 🟡  |   🟡    |
-| GPU — Mali-450 under lima                   | ✅  |   ✅    |
-| Decode H.264 · HEVC · VP9 · MJPEG, to 8K    | ✅  |   ✅    |
-| Decode MPEG-2 · MPEG-4 · VP8 · H.263, 1080p | ✅  |   ✅    |
-| Encode HEVC · MJPEG · H.264, to 8K          | ✅  |   ✅    |
-| AV1                                         | ➖  |   ➖    |
-| **Input and indicators**                    |     |         |
-| Bundled remote over IR                      | ✅  |   ✅    |
-| Bundled remote over Bluetooth, air-mouse    | ✅  |   ✅    |
-| Remote voice mic                            | 🟡  |   🟡    |
-| IR-extender jack                            | 🟡  |   ➖    |
-| Recovery button in the AV jack              | ✅  |   ✅    |
-| Power button on the remote                  | ✅  |   ✅    |
-| Front LEDs                                  | ✅  |   ✅    |
-| **Power and recovery**                      |     |         |
-| Suspend to RAM, wake on the remote          | ✅  |   ✅    |
-| Hardware watchdog                           | ✅  |   ✅    |
-| Serial console                              | ✅  |   ✅    |
-| Maskrom recovery over USB                   | 🟡  |   🟡    |
+| Hardware                                    | R69 | H96 Max H313 | H96 Max 3518D |
+| ------------------------------------------- | :-: | :----------: | :-----------: |
+| **Storage**                                 |     |              |               |
+| eMMC — boot and rootfs                      | ✅  |      ✅      |      ✅       |
+| microSD — boot and rootfs                   | ✅  |      ✅      |      ➖       |
+| microSD hotplug                             | 🟡  |      🟡      |      ➖       |
+| microSD SDR104 (UHS)                        | ✅  |      ❌      |      ➖       |
+| USB 2.0                                     | ✅  |      ✅      |      ✅       |
+| USB 3.0 — 5 Gbps, `uas`                     | ✅  |      ✅      |      ➖       |
+| **Network**                                 |     |              |               |
+| Ethernet 10/100                             | ✅  |      ✅      |      ➖       |
+| Wi-Fi 2.4 GHz                               | ✅  |      ✅      |      ✅       |
+| Wi-Fi 5 GHz                                 | ✅  |      ✅      |      ✅       |
+| Bluetooth                                   | ✅  |      ✅      |      ✅       |
+| **Display and video**                       |     |              |               |
+| HDMI video                                  | ✅  |      ✅      |      ✅       |
+| HDMI audio                                  | ✅  |      ✅      |      ✅       |
+| HDMI EDID mode list                         | 🟡  |      🟡      |      ✅       |
+| HDMI hotplug re-detect                      | 🟡  |      🟡      |      ✅       |
+| HDMI 4K60                                   | 🟡  |      🟡      |      ✅       |
+| HDMI-CEC                                    | 🟡  |      🟡      |      ✅       |
+| AV jack — composite video and audio         | 🟡  |      🟡      |      ➖       |
+| GPU — Mali-450 under lima                   | ✅  |      ✅      |      ✅       |
+| Decode H.264 · HEVC · VP9 · MJPEG, to 8K    | ✅  |      ✅      |      ✅       |
+| Decode MPEG-2 · MPEG-4 · VP8 · H.263, 1080p | ✅  |      ✅      |      ✅       |
+| Encode HEVC · MJPEG · H.264, to 8K          | ✅  |      ✅      |      ✅       |
+| **Input and indicators**                    |     |              |               |
+| Bundled remote over IR                      | ✅  |      ✅      |      ➖       |
+| Bundled remote over Bluetooth, air-mouse    | ✅  |      ✅      |      ✅       |
+| Remote voice mic                            | 🟡  |      🟡      |      🟡       |
+| IR-extender jack                            | 🟡  |      ➖      |      ➖       |
+| Recovery button → Maskrom                   | ✅  |      ✅      |      ✅       |
+| Power button on the remote                  | ✅  |      ✅      |      ✅       |
+| Front LEDs                                  | ✅  |      ✅      |      ✅       |
+| **Power and recovery**                      |     |              |               |
+| Suspend to RAM, wake on the remote          | ✅  |      ✅      |      ❌       |
+| Hardware watchdog                           | ✅  |      ✅      |      ✅       |
+| Serial console                              | ✅  |      ✅      |      ✅       |
+| Maskrom recovery over USB                   | ✅  |      ✅      |      ✅       |
 
 ## Build
 
-Needs a **microSD** (8 GB+) and a stock ROCK 2F `.img.xz` (tested: `minimal` vendor 6.1).
+Needs a stock ROCK 2F `.img.xz` (tested: `minimal` vendor 6.1), and a **microSD** (8 GB+) on the
+boxes that have a slot — the rest take the same image over USB, below.
 
 ```bash
 brew install xz coreutils                    # macOS  ·  apt install xz-utils on Debian
 ./build-e2tools.sh                           # once — stock e2tools corrupts an image on delete
-./build-image.sh Armbian_..._Rock-2f_..._minimal.img.xz h96max      # board: r69 | h96max
+./build-image.sh Armbian_..._Rock-2f_..._minimal.img.xz h96max   # r69 | h96max | h96max-3518d
 ```
 
 ~1 minute, no Docker, no kernel build. Output: `Armbian_..._-<board>.img`.
@@ -97,6 +108,8 @@ again.
 
 > **First boot takes ~5 minutes** and is off the network while DKMS compiles.
 
+> **No card slot on your box?** Nothing here boots from SD, so skip to [no SD slot](#no-sd-slot).
+
 ## Install to eMMC
 
 **Wipes Android and everything else on that chip.** Boot from SD, dump the chip somewhere durable,
@@ -107,27 +120,51 @@ lsblk                                        # the eMMC is the disk with mmcblkX
 sudo dd if=/dev/mmcblkX bs=4M status=progress | ssh you@host 'cat > emmc-stock.img'
 
 sudo armbian-install                         # choose "Boot from eMMC / system on eMMC"
+
+ssh you@host 'dd if=emmc-stock.img bs=512 skip=7168 count=9216' \
+  | sudo dd of=/dev/mmcblkX bs=512 seek=7168 conv=notrunc,fsync        # optional, see below
+sudo rk35xx-vendor-storage lan                                         # must match the box label
+
 sudo poweroff                                # pull the SD; it boots from eMMC
 ```
 
-Dump the **disk**, not partitions. Check `stat -c %s emmc-stock.img` equals
-`cat /sys/block/mmcblkX/size` × 512, and keep it off the box and off the SD card.
+Dump the **disk**, not partitions; `stat -c %s` must equal `/sys/block/mmcblkX/size` × 512. Keep it
+off the box and off the SD.
 
-> **`armbian-install` clears everything below sector 20480** — including vendor storage (`DVKR` at
-> 7168, your label `LAN_MAC`) and secure storage (`SSKR` at 8192, HDCP/DRM keys). Current images
-> spare that window, older ones do not, and neither store regenerates. Put it back from your dump
-> every time; it is a no-op if the installer spared it:
->
-> ```sh
-> dd if=emmc-stock.img bs=512 skip=7168 count=9216 of=window.bin          # on the host
-> sudo dd if=window.bin of=/dev/mmcblkX bs=512 seek=7168 count=9216 conv=notrunc,fsync
-> sudo rk35xx-vendor-storage lan                                          # must match the box label
-> ```
+Sectors 7168–16383 hold `DVKR` (the factory `LAN_MAC`) and `SSKR` (HDCP/DRM keys). `armbian-config`
+spares them; older versions zero everything below 20480. Neither is needed: without `DVKR`
+`rk35xx-mac-pin` derives a stable address instead, and `SSKR` is unreachable under our U-Boot.
+Restore only if you want the factory MAC back. `docs/armbian-install.md` has the detail.
 
 ## No SD slot
 
-A box without a card slot has nothing to boot from, so the backup and the install both go over USB
-in maskrom. `docs/maskrom.md` covers it end to end — see its **Write an image over USB**.
+Nothing to boot from, so backup and install both go over USB in Maskrom. Hold the recovery button,
+then plug the OTG cable in — the cable powers the box, so the PSU stays out.
+
+**One cable, ordered before you need it:** a [USB-A male-to-male][amm]
+(~$4), with a
+[USB-C→USB-A female adapter][ca] (~$8 for 4) on whichever end is USB-C. Charge-only
+cables enumerate nothing, and a plain USB-C→USB-A cable with the C end in the host does not do OTG
+at all.
+
+[amm]: https://www.amazon.com/dp/B0CLB4Y5XD
+[ca]: https://www.amazon.com/dp/B0DSK82JK8
+
+```sh
+./build-rktools.sh                                 # once -> tools/rktools/
+cd tools/rktools
+
+./rkdeveloptool ld                                 # must say Maskrom
+./rkdeveloptool db rk3528_spl_loader-<board>.bin   # one loader per board, it carries its DDR init
+
+./rkdeveloptool rfi                                # total sectors, e.g. 30777344
+./rkdeveloptool rl 0 <sectors> emmc-stock.img      # back up first
+./rkdeveloptool wl 0 <image>                       # then write
+./rkdeveloptool rd                                 # reboot
+```
+
+`docs/maskrom.md` has the other entry routes, how to verify a dump, and what to do if a transfer
+stalls.
 
 ## Update a running box
 
@@ -143,12 +180,12 @@ Installs the payload, rebuilds DKMS, reinstalls the DTB, restarts changed servic
 
 ## Remote
 
-IR works unpaired. Bluetooth adds air-mouse and battery. Keycodes vary per remote — read yours with
-`sudo evtest /dev/input/ir-remote`.
+IR works unpaired, unless the board has no IR receiver — the stick models do not. Bluetooth adds
+air-mouse and battery; read your keycodes with `sudo evtest /dev/input/bt-remote` or
+`/dev/input/ir-remote`.
 
 Pairing mode is **left + right until the LED blinks**; the entry is named **`Bluetooth remote`**.
-Pair in **one `bluetoothctl` session with a scan running**, or it fails with
-`org.bluez.Error.AuthenticationFailed`:
+Pair in **one `bluetoothctl` session with a scan running**:
 
 ```sh
 sudo apt install bluez            # minimal images ship without it
@@ -163,26 +200,24 @@ MAC=$(bluetoothctl --timeout 20 scan on | grep -im1 "bluetooth remote" \
   echo "connect $MAC"; sleep 8;  echo quit; } | bluetoothctl
 ```
 
-`bluetoothctl remove $MAC` drops the bond, `disconnect` parks it.
-
-> Dead IR means your remote's usercode is not in the DTB's scancode tables — same model name,
-> different remotes.
-
 ## Serial console
 
 The only view of U-Boot and of any hang before the network. **3.3 V, 1500000 baud.** Both cases open
-with a plastic pry tool; the H96 Max needs a couple of screws out to reach the pads from the back.
+with a plastic pry tool; the H313 needs a couple of screws out to reach the pads from the back.
 
-| Board       | Where                                       | Pinout, `[square pad]` first |
-| ----------- | ------------------------------------------- | ---------------------------- |
-| **R69**     | 4-pad header beside the SD slot             | **[GND] · TX · RX · 3V3**    |
-| **H96 Max** | 3 plated holes between the SD slot and LEDs | **[RX] · GND · TX**          |
+| Board             | Where                                       | Pinout, `[square pad]` where marked |
+| ----------------- | ------------------------------------------- | ----------------------------------- |
+| **R69**           | 4-pad header beside the SD slot             | **[GND] · TX · RX · 3V3**           |
+| **H96 Max H313**  | 3 plated holes between the SD slot and LEDs | **[RX] · GND · TX**                 |
+| **H96 Max 3518D** | 3 tiny round test points, no holes          | **TX · GND · RX**, TX nearest HDMI  |
 
 - **Adapter:** 3.3 V USB-TTL doing 1.5 Mbaud — **FT232 or CH340**, e.g.
   [Waveshare FT232RNL](https://www.amazon.com/dp/B0CX55K4RG) (~$14). **Not a CP2102** — it cannot do
   1.5 Mbaud and prints plausible garbage.
 - **Wiring:** GND, TX, RX only, crossed (box TX → adapter RX). **Never connect 3V3/VCC.**
-- **Contact:** no soldering — [test-hook grabbers](https://www.amazon.com/dp/B07BCZSNGS) (~$10).
+- **Contact:** no soldering where there are holes or a header —
+  [test-hook grabbers](https://www.amazon.com/dp/B07BCZSNGS) (~$10). Bare test points give a hook
+  nothing to grip: hold a fine probe against the pad, or solder.
 
 ```bash
 brew install tio                                              # or: apt install tio
@@ -196,7 +231,7 @@ contact and the TX↔RX crossing. Full kernel log on serial and HDMI: `verbosity
 
 ## Recovery
 
-**SD still boots.** Write the backup back over the eMMC:
+**SD still boots** — write the backup straight back:
 `sudo dd if=emmc-stock.img of=/dev/mmcblkX bs=4M status=progress; sync`.
 
 **Nothing boots, or the box has no SD slot** — go in over USB: `docs/maskrom.md`, section **Write an
@@ -209,7 +244,6 @@ Bring-up method from
 
 ## License
 
-Scripts MIT. The shipped device trees are decompiled from each box's own factory DTB — a hardware
-description (register addresses, GPIO routing, clocks) in a layout the DT bindings dictate, carrying
-no vendor header or comments. `factory_idbloader.bin` is the vendor's blob; `u-boot.itb` is mainline
-U-Boot plus Rockchip's ATF, under their own licenses.
+Scripts MIT. Device trees are decompiled from each box's factory DTB: a factual hardware description
+in the bindings' layout, no vendor header or comments. `factory_idbloader.bin` (vendor blob) and
+`uboot.itb` (mainline U-Boot + Rockchip ATF) keep their own licenses.

@@ -1,0 +1,2 @@
+# <iface> <prefix> — fallback only; vendor storage wins when it holds an address.
+wlan0 fe:fd:fc
