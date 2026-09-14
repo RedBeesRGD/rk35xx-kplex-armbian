@@ -2051,3 +2051,17 @@ not the box.
 
 **Open gap:** `/usr/local/share/rk35xx/board.dtb` here predates `mode-maskrom`, so the dtb-persist
 hook would reinstate a tree without it on the next kernel update. A deploy closes it.
+
+## 2026-09-14 — factory chip images replace the KICKPI K3B build
+
+`SWT6621S_DRAM_SDIO.bin` and `_IRAM_` switch from the KICKPI K3B build to the factory images. The NV
+and the RF table were always factory; only the chip code came from another product, adopted because
+the factory images assert on the HCI codec reads (`BSPASSERT:hci_tl.c-386`). `0005` answers those
+opcodes locally, which removes the reason.
+
+`skw_boot.c` loads this pair for the whole chip, so it is the Wi-Fi firmware too, and `0002` — the
+TX BA renegotiation fix — was developed against K3B on this board. Measured after the swap, three
+sustained 150 MB uplinks: 64.2, 68.8, 70.1 Mbit/s against a 63.8 Mbit/s K3B baseline. No latch; a 6
+Mbit/s latch reads ~1.2. `hci0` comes up with zero `BSPASSERT`.
+
+Reverting is the two blobs; git history holds the K3B build.

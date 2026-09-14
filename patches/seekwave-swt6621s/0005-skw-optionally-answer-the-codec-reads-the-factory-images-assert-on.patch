@@ -1,0 +1,112 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Artem Butusov <art.sormy@gmail.com>
+Date: Sat, 12 Sep 2026 23:55:00 -0400
+Subject: [PATCH] skw: optionally answer the codec reads the factory images
+ assert on
+
+The factory chip images for this part advertise the HCI codec-read commands
+in their own supported-commands bitmap and then assert when one is sent -
+BSPASSERT:hci_tl.c-386, surfaced to the host as HCI_EV_HARDWARE_ERROR, which
+ends controller init before anything is usable. Traced on an H96 Max 3518D:
+roughly eighty init commands answered perfectly, then Read Local Supported
+Codec Capabilities (0x100e) kills it.
+
+The core has no way to know. It gates those reads on the bitmap the
+controller itself supplied, so a firmware that lies is indistinguishable from
+one that works. HCI_QUIRK_BROKEN_LOCAL_COMMANDS would avoid them by skipping
+Read Local Supported Commands entirely, but that zeroes the whole bitmap and
+takes dozens of unrelated features down with it.
+
+Answer the three codec reads in the driver instead, with Unknown HCI Command,
+which is exactly what the core expects from a controller that does not have
+them. The commands never reach the chip and init continues.
+
+Default off. It only matters when running an image with this defect, and a
+silent opcode filter should be asked for rather than inherited.
+
+Signed-off-by: Artem Butusov <art.sormy@gmail.com>
+---
+ drivers/swtbt4l/skw_btdriver.c | 63 ++++++++++++++
+ 1 file changed
+
+--- a/drivers/swtbt4l/skw_btdriver.c	2026-09-14 18:38:28
++++ b/drivers/swtbt4l/skw_btdriver.c	2026-09-14 18:38:28
+@@ -426,6 +426,52 @@
+ static struct notifier_block skwbt_pm_nb = { .notifier_call = skwbt_pm_notify };
+ #endif
+ 
++/* The factory chip images assert on the codec reads - BSPASSERT:hci_tl.c-386, delivered as
++ * HCI_EV_HARDWARE_ERROR, which kills init before the controller is usable. They advertise support
++ * for the commands in their own bitmap, so the core has every reason to send them; only the
++ * firmware knows better. Answering locally with "Unknown HCI Command" is what the core already
++ * expects from a controller that lacks them, and it costs nothing on images that would have worked.
++ *
++ * Off by default: it only matters when running those images, and a silent opcode filter is the kind
++ * of thing that should be asked for rather than inherited.
++ */
++static bool skip_codec_reads;
++module_param(skip_codec_reads, bool, 0444);
++MODULE_PARM_DESC(skip_codec_reads,
++    "Answer the HCI codec-read commands in the driver instead of sending them to the chip. Needed "
++    "by firmware images that advertise them and then assert. Default off.");
++
++static void skwbt_cmd_complete(struct hci_dev *hdev, u16 opcode, u8 status)
++{
++    uint8_t pkt[6] = { HCI_EV_CMD_COMPLETE, 0x04, 0x01,
++                       (uint8_t)(opcode & 0xff), (uint8_t)(opcode >> 8), status };
++    struct sk_buff *skb = alloc_skb(sizeof(pkt), GFP_ATOMIC);
++    uint8_t *base_ptr = NULL;
++
++    if (!skb)
++    {
++        SKWBT_ERROR("%s: failed to allocate mem", __func__);
++        return;
++    }
++    base_ptr = (uint8_t *)skb_put(skb, sizeof(pkt));
++    if (base_ptr)
++    {
++        memcpy(base_ptr, pkt, sizeof(pkt));
++    }
++    bt_cb(skb)->pkt_type = HCI_EVENT_PKT;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0)
++    hci_recv_frame(hdev, skb);
++#else
++    hci_recv_frame(skb);
++#endif
++}
++
++/* 0x100b Read Local Supported Codecs, 0x100d its v2, 0x100e Read Local Supported Codec Capabilities */
++static bool skwbt_is_codec_read(u16 opcode)
++{
++    return opcode == 0x100b || opcode == 0x100d || opcode == 0x100e;
++}
++
+ static char skwbt_board_id[64] = "";
+ 
+ static int skwbt_request_firmware(const struct firmware **fw,
+@@ -1190,7 +1236,22 @@
+ {
+     struct btseekwave_data *data = hci_get_drvdata(hdev);
+     u8 pkt_type = bt_cb(skb)->pkt_type;
+-    u8 *d = skb_push(skb, 1);
++    u8 *d = NULL;
++
++    if (skip_codec_reads && pkt_type == HCI_COMMAND_PKT && skb->len >= 2)
++    {
++        u16 opcode = skb->data[0] | (skb->data[1] << 8);
++
++        if (skwbt_is_codec_read(opcode))
++        {
++            SKWBT_INFO("answering codec read 0x%04x locally", opcode);
++            skwbt_cmd_complete(hdev, opcode, 0x01); /* Unknown HCI Command */
++            kfree_skb(skb);
++            return 0;
++        }
++    }
++
++    d = skb_push(skb, 1);
+     *d = pkt_type;
+ 
+     /* There is no command to read the event mask back, so the only faithful restore is the value
+-- 
+2.55.0

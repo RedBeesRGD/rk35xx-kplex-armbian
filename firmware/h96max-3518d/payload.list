@@ -13,6 +13,7 @@
 0644 common/seekwave-fw/SWT6621S_NV_SDIO_SHARED_TDD.bin /lib/firmware/SWT6621S_NV_SDIO.bin
 0644 common/seekwave-fw/SWT6621S_SEEKWAVE_R00001.bin    /lib/firmware/SWT6621S_SEEKWAVE_R00001.bin
 0644 common/seekwave-fw/sv6160lite.nvbin                /lib/firmware/sv6160lite.nvbin
+0644 common/skwbt-options.conf                          /etc/modprobe.d/zz-rk35xx-skwbt.conf
 
 # DKMS build files (sources fetched at image build; rk35xx-firstboot builds whatever is staged)
 
