@@ -111,8 +111,10 @@ untried here. `card0-TV-1` always reads `connected` — TVE has no detect line.
 amixer -c rk3528acodec sset 'DAC LEFT LINEOUT' 80%
 ```
 
-PipeWire selects HDMI ahead of it, and separately remembers a per-application sink that outlives a
-change of default.
+`rk35xx-audio-select` ranks the sinks at boot from `/sys/class/drm/card*-HDMI-A-*/status` and sets
+both gains. The shipped WirePlumber drop-in turns off remembered targets and volumes, which
+otherwise outrank that ranking — PipeWire remembers a sink **per application**, so changing the
+default and restarting the app puts it straight back. A cable moved after boot is not followed.
 
 A television crops every edge. A 640x480 image centred in 720x480 is inset 40 px each side
 horizontally and not at all vertically, so the top and bottom rows are what get lost.

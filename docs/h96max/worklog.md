@@ -2195,3 +2195,33 @@ A 440 Hz `speaker-test` came out of the jack first, then doppler after the move.
 
 **Still open:** overscan on both the console and the compositor; PAL `<0x00>` never selected; and
 the three `drm-rockchip-*` patches are written but unbuilt.
+
+## 2026-09-21 — audio output follows the display, chosen at boot
+
+The kernel reports the HDMI jack — `rockchip,jack-det` is in the tree and `amixer -c 0 controls`
+shows `numid=37,iface=CARD,name='rockchip,hdmi Jack'`. PipeWire never sees it. All three cards are
+`simple-audio-card` with no UCM profile, so each comes up as one generic port:
+
+```
+analog-output: Analog Output (type: Analog, priority: 9900, availability unknown)
+```
+
+`availability unknown` on every sink means the default-node picker has nothing to skip, so the
+elegant version — rank the sinks, let an unavailable HDMI fall through — has no input to work from.
+A UCM profile declaring the port with its `JackControl` would supply it; untried.
+
+Took the DRM connector instead. `rk35xx-audio-select` runs before `systemd-user-sessions.service`,
+reads `/sys/class/drm/card*-HDMI-A-*/status`, and writes sink priorities into a generated
+`wireplumber.conf.d` drop-in that the session's wireplumber picks up on start. Same rule either way
+— HDMI when a cable is in it, the AV jack otherwise — but keyed on the thing that decides which
+display is live rather than on whether a sound card happens to expose a jack. Hotplug is out of
+scope by decision, not by accident.
+
+The shipped `50-rk35xx-no-restore.conf` turns off remembered stream targets and device volumes.
+Without it the ranking loses to WirePlumber's per-application memory, which is what sent doppler
+back to HDMI after every restart earlier today.
+
+Branches exercised on the host against a faked sysfs tree: connected → HDMI 2000 / analog 1000,
+disconnected and connector-absent → analog 2000 / HDMI 1000. **Nothing here has been run on the box
+or across a reboot**, and the three `wireplumber.settings` key names are unverified —
+`wpctl settings` lists what a build accepts.
