@@ -50,7 +50,17 @@
  		support-multi-area;
  		phandle = <0xea>;
  
-@@ -1384,7 +1391,10 @@
+@@ -1260,6 +1267,9 @@
+ 		rockchip,lumafilter6 = <0xf830df7>;
+ 		rockchip,lumafilter7 = <0x8de055f>;
+ 		rockchip,tve-upsample = <0x02>;
++		/* 01 = NTSC 720x480i preferred, 00 = PAL 720x576i - both stay in the mode list.
++		 * Absent, the vendor driver reads an uninitialised value and prefers neither. */
++		rockchip,tvemode = <0x01>;
+ 		rockchip,grf = <&grf>;
+ 		nvmem-cells = <&vdac_out_current &test_version>;
+ 		nvmem-cell-names = "out-current", "version";
+@@ -1384,7 +1394,10 @@
  		reg-shift = <0x02>;
  		reg-io-width = <0x04>;
  		dmas = <&dmac 0x09 &dmac 0x08>;
@@ -62,7 +72,7 @@
  		phandle = <0xf3>;
  	};
  
-@@ -1668,7 +1678,8 @@
+@@ -1668,7 +1681,8 @@
  		status = "okay";
  		remote_pwm_id = <0x03>;
  		handle_cpu_id = <0x01>;
@@ -72,7 +82,7 @@
  		phandle = <0x107>;
  
  		ir_key1 {
-@@ -1784,7 +1795,8 @@
+@@ -1784,7 +1798,8 @@
  		clocks = <&cru 0x73 &cru 0x72>;
  		clock-names = "tclk", "pclk";
  		interrupts = <0x00 0x1c 0x04>;
@@ -82,7 +92,7 @@
  		phandle = <0x10d>;
  	};
  
-@@ -2082,11 +2094,9 @@
+@@ -2082,11 +2097,9 @@
  		pinctrl-names = "default";
  		pinctrl-0 = <&sdmmc_clk &sdmmc_cmd &sdmmc_det &sdmmc_bus4>;
  		rockchip,default-sample-phase = <0x5a>;
@@ -96,7 +106,7 @@
  		vqmmc-supply = <&vccio_sd>;
  		vmmc-supply = <&vcc_sd>;
  		phandle = <0x114>;
-@@ -4104,7 +4114,9 @@
+@@ -4104,7 +4117,9 @@
  		compatible = "gpio-leds";
  		phandle = <0x1c7>;
  
@@ -107,7 +117,7 @@
  			gpios = <&gpio4 0x11 0x01>;
  			linux,default-trigger = "none";
  			default-state = "on";
-@@ -4112,7 +4124,8 @@
+@@ -4112,7 +4127,8 @@
  			retain-state-shutdown;
  		};
  
@@ -117,7 +127,7 @@
  			gpios = <&gpio4 0x0b 0x01>;
  			linux,default-trigger = "none";
  			default-state = "off";
-@@ -4121,10 +4134,7 @@
+@@ -4121,10 +4137,7 @@
  		};
  	};
  
@@ -129,7 +139,7 @@
  
  	fiq-debugger {
  		compatible = "rockchip,fiq-debugger";
-@@ -4135,7 +4145,8 @@
+@@ -4135,7 +4148,8 @@
  		interrupts = <0x00 0xba 0x04>;
  		pinctrl-names = "default";
  		pinctrl-0 = <&uart0m0_xfer>;

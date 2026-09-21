@@ -93,6 +93,16 @@ are claimed by the capability word but stay 🟡 — no encoder exists to make a
 
 The R69 measures within noise of every number above — same silicon, so neither box is an outlier.
 
+## AV jack — composite video
+
+❓ **Never seen working on any kernel Armbian ships.** `tve@ff880000` is `okay` from the factory and
+wired to VP1, but `ROCKCHIP_DRM_TVE` is off in `linux-rk35xx-vendor`, so nothing binds the node and
+no `card0-TV-1` connector exists. The tree now names NTSC 720x480i as the preferred mode and the
+kernel fork builds the driver; neither has been put in front of a TV. `docs/todo/rk35xx-cvbs-tve.md`
+holds the measurement behind that and the test to run.
+
+The recovery button is recessed inside this same socket, so a plug and a toothpick contend for it.
+
 ## Names on disk
 
 Every installed path is `rk35xx-`, the same as every other board: scripts under `/usr/local/sbin/`,

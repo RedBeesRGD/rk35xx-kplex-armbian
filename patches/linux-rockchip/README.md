@@ -13,6 +13,7 @@ so the work survives, and because the bugs they describe are visible on both boa
 | `bluetooth-hci-h4-serdev`                | [#526][526]   | serdev binding for `hci_h4`, so BT needs no `hciattach` unit                |
 | `wireless-aic8800-stable-mac`            | [#527][527]   | the AIC8800 inventing a fresh MAC each boot                                 |
 | `mmc-dw-mmc-rockchip-per-host-inherit`   | not submitted | `static bool inherit` in `dw_mci_v2_execute_tuning()` — **not needed here** |
+| `drm-rockchip-tve-init-preferred-mode`   | not submitted | an uninitialised `preferred_mode` when `rockchip,tvemode` is absent         |
 
 [523]: https://github.com/armbian/linux-rockchip/pull/523
 [524]: https://github.com/armbian/linux-rockchip/pull/524
@@ -22,6 +23,12 @@ so the work survives, and because the bugs they describe are visible on both boa
 
 **#524 is worth more than the rest combined for log hygiene.** One WARN at probe emits its call
 trace and register dump — ~416 lines, 78% of all err/warn on the R69 and 82% on the H96 Max.
+
+**`drm-rockchip-tve-init-preferred-mode` stays unsubmitted until the driver it fixes has been run.**
+`ROCKCHIP_DRM_TVE` is off in `linux-rk35xx-vendor`, so no kernel here has ever built
+`rockchip_drm_tve.c`; the bug is read out of the source, not off a box. The board tree sets
+`rockchip,tvemode` explicitly, which sidesteps it either way. `docs/todo/rk35xx-cvbs-tve.md` holds
+what has to happen before this is worth sending.
 
 **`mmc-dw-mmc-rockchip-per-host-inherit` stays unsubmitted: neither board can trigger the bug, and
 neither can be made to.** It needs two enabled `dw_mci` controllers both taking the v2 tuning path,

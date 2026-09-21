@@ -1,0 +1,51 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Artem Butusov <art.sormy@gmail.com>
+Date: Sun, 21 Sep 2026 00:00:00 +0000
+Subject: [PATCH] drm/rockchip: tve: don't read an uninitialised preferred mode
+
+tve_parse_dt() and tve_parse_dt_legacy() both declare "int ret, val" and
+then read "rockchip,tvemode" into val. of_property_read_u32() leaves val
+untouched when the property is absent, and the absent branch assigns
+tve->preferred_mode twice:
+
+	if (ret < 0) {
+		tve->preferred_mode = 0;	/* immediately overwritten */
+	} else if (val > 1) {
+		...
+	}
+	tve->preferred_mode = val;		/* val is indeterminate */
+
+So a tree that leaves the property out gets a stack-garbage preferred
+mode instead of the intended 0. rockchip_tve_get_modes() then compares it
+against the cvbs_mode[] index to set DRM_MODE_TYPE_PREFERRED; any value
+other than 0 or 1 marks neither 720x576i nor 720x480i as preferred, and
+userspace picks whichever mode it happens to enumerate first. The two
+vendor RK3528 TV-box trees in the wild both omit the property.
+
+Assign val in the absent branch so the single store below sees the
+intended default.
+
+Signed-off-by: Artem Butusov <art.sormy@gmail.com>
+---
+diff --git a/drivers/gpu/drm/rockchip/rockchip_drm_tve.c b/drivers/gpu/drm/rockchip/rockchip_drm_tve.c
+index f34b6d8..f7501b1 100644
+--- a/drivers/gpu/drm/rockchip/rockchip_drm_tve.c
++++ b/drivers/gpu/drm/rockchip/rockchip_drm_tve.c
+@@ -711,7 +711,7 @@ static int tve_parse_dt(struct device_node *np, struct rockchip_tve *tve)
+ 
+ 	ret = of_property_read_u32(np, "rockchip,tvemode", &val);
+ 	if (ret < 0) {
+-		tve->preferred_mode = 0;
++		val = 0;
+ 	} else if (val > 1) {
+ 		dev_err(tve->dev, "tve mode value invalid\n");
+ 		return -EINVAL;
+@@ -802,7 +802,7 @@ static int tve_parse_dt_legacy(struct device_node *np, struct rockchip_tve *tve)
+ 
+ 	ret = of_property_read_u32(np, "rockchip,tvemode", &val);
+ 	if (ret < 0) {
+-		tve->preferred_mode = 0;
++		val = 0;
+ 	} else if (val > 1) {
+ 		dev_err(tve->dev, "tve mode value invalid\n");
+ 		return -EINVAL;

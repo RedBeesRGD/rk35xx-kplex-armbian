@@ -60,7 +60,7 @@ bootloader, device tree, DKMS drivers, boot fixups — is sideloaded into it. No
 | HDMI hotplug re-detect                      | 🟡  |      🟡      |      ✅       |
 | HDMI 4K60                                   | 🟡  |      🟡      |      ✅       |
 | HDMI-CEC                                    | 🟡  |      🟡      |      ✅       |
-| AV jack — composite video and audio         | 🟡  |      🟡      |      ➖       |
+| AV jack — composite video and audio         | ❓  |      ❓      |      ➖       |
 | GPU — Mali-450 under lima                   | ✅  |      ✅      |      ✅       |
 | Decode H.264 · HEVC · VP9 · MJPEG, to 8K    | ✅  |      ✅      |      ✅       |
 | Decode MPEG-2 · MPEG-4 · VP8 · H.263, 1080p | ✅  |      ✅      |      ✅       |

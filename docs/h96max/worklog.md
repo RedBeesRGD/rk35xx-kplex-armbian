@@ -2065,3 +2065,72 @@ sustained 150 MB uplinks: 64.2, 68.8, 70.1 Mbit/s against a 63.8 Mbit/s K3B base
 Mbit/s latch reads ~1.2. `hci0` comes up with zero `BSPASSERT`.
 
 Reverting is the two blobs; git history holds the K3B build.
+
+## 2026-09-21 — the AV jack's 🟡 was never earned: no TVE driver in the kernel
+
+Went looking for what CVBS needs in the tree and found the tree already has all of it.
+`tve@ff880000` is `status = "okay"` straight from the factory blob, `rockchip,rk3528-tve` matches
+the vendor driver's `of_device_id` table, `vp1_out_tve` ↔ `tve_in_vp1` is wired, `route_tve` is
+`okay`, and the `vdac_out_current` / `test_version` nvmem cells the RK3528 path reads both exist.
+`board.patch` touches none of it. Nothing to add.
+
+The blocker is a kernel config symbol. `ROCKCHIP_DRM_TVE` is `bool` with no `default` in
+`drivers/gpu/drm/rockchip/Kconfig`, and Armbian's `linux-rk35xx-vendor.config` is a savedefconfig
+that does not mention it — so it is off. Resolved it rather than argued it:
+
+```
+cp build/config/kernel/linux-rk35xx-vendor.config linux-kplex/.config
+make -C linux-kplex ARCH=arm64 olddefconfig
+grep ROCKCHIP_DRM_TVE linux-kplex/.config
+# CONFIG_ROCKCHIP_DRM_TVE is not set
+```
+
+`rockchipdrm-$(CONFIG_ROCKCHIP_DRM_TVE) += rockchip_drm_tve.o` — it links into `rockchipdrm`, so it
+is not a module and an overlay cannot add it. Every `apt` kernel this box has ever run has been
+without it, which means the README's 🟡 on the AV jack was backed by nothing. Now ❓.
+
+The one piece of evidence that looked like a working TVE under Armbian is not:
+`card0-TV-1 connected` lives in `stock/h96max-3518d/display.txt`, a factory Android dump, and that
+kernel config has `CONFIG_ROCKCHIP_DRM_TVE=y`.
+
+`CONFIG_ROCKCHIP_DRM_TVE=y` added to the build fork's config, between `ROCKCHIP_CDN_DP` and
+`ROCKCHIP_DW_HDMI` where Kconfig order puts it. `make savedefconfig` keeps it there, so the fork's
+automatic kernel-config rewrite will not drop it.
+
+**A driver bug found on the way.** `tve_parse_dt()` declares `int ret, val`, then:
+
+```c
+	ret = of_property_read_u32(np, "rockchip,tvemode", &val);
+	if (ret < 0) {
+		tve->preferred_mode = 0;	/* immediately overwritten */
+	} else if (val > 1) {
+		...
+	}
+	tve->preferred_mode = val;		/* val never written when absent */
+```
+
+`rockchip_tve_get_modes()` compares `preferred_mode` against the `cvbs_mode[]` index, so garbage
+marks neither 720x576i nor 720x480i preferred and userspace takes whichever comes first. Same bug in
+`tve_parse_dt_legacy()`. Both fixed in
+`patches/linux-rockchip/drm-rockchip-tve-init-preferred-mode.patch`; not applied here, per that
+directory's rule.
+
+The tree now sets `rockchip,tvemode = <0x01>` — NTSC 720x480i preferred, `<0x00>` for PAL — which
+makes the bug moot on this board and states the intent either way. Vendor U-Boot pins `route_tve` to
+720x576@50 before handing over; ours has no `tve` node at all, so the kernel decides.
+
+`BOARD=h96max-zx STOCK=h96max ./upstream/build.sh` regenerates clean: one new override,
+`&tve { rockchip,tvemode = <0x01>; };`, and **VERIFIED: native tree is content-identical to the
+patched tree**.
+
+**Checked that the 4K graft does not cost VP1 anything**, since both wanted looking at together.
+`rk3528_vop_video_ports[1].max_output` is `{ 720, 576 }` — VP1 exists for CVBS and nothing else. By
+`layer_sel_id`, its planes are Esmart2 (cursor) and Esmart3 (primary); Esmart0 and Esmart1 are
+VP0-only. `vop3_ignore_plane()` in `VOP3_ESMART_4K_2K_2K_MODE` — our `esmart_lb_mode = [02]` —
+refuses Esmart1 only, and halves the line-buffer width of Esmart2/Esmart3 to 2048 px, which is still
+three CVBS lines. No tree here sets `rockchip,plane-mask`, so `bootloader_initialized` stays false
+and VOP2 hands Esmart0 to VP0 and Esmart3 to VP1 by itself. HDMI 4K60 and CVBS do not contend.
+
+**Nothing here has been near a TV.** No box was touched: the kernel is not built, the DTB is not
+deployed, and the jack has never shown a picture. `docs/todo/rk35xx-cvbs-tve.md` carries what to
+run. Analog audio on the same jack is untouched and still unexamined.

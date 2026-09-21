@@ -1267,6 +1267,9 @@
 		rockchip,lumafilter6 = <0xf830df7>;
 		rockchip,lumafilter7 = <0x8de055f>;
 		rockchip,tve-upsample = <0x02>;
+		/* 01 = NTSC 720x480i preferred, 00 = PAL 720x576i - both stay in the mode list.
+		 * Absent, the vendor driver reads an uninitialised value and prefers neither. */
+		rockchip,tvemode = <0x01>;
 		rockchip,grf = <&grf>;
 		nvmem-cells = <&vdac_out_current &test_version>;
 		nvmem-cell-names = "out-current", "version";
