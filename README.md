@@ -60,7 +60,8 @@ bootloader, device tree, DKMS drivers, boot fixups — is sideloaded into it. No
 | HDMI hotplug re-detect                      | 🟡  |      🟡      |      ✅       |
 | HDMI 4K60                                   | 🟡  |      🟡      |      ✅       |
 | HDMI-CEC                                    | 🟡  |      🟡      |      ✅       |
-| AV jack — composite video and audio         | ❓  |      ❓      |      ➖       |
+| AV jack — composite video                   | ❓  |      ✅      |      ➖       |
+| AV jack — analog audio                      | ❓  |      ✅      |      ➖       |
 | GPU — Mali-450 under lima                   | ✅  |      ✅      |      ✅       |
 | Decode H.264 · HEVC · VP9 · MJPEG, to 8K    | ✅  |      ✅      |      ✅       |
 | Decode MPEG-2 · MPEG-4 · VP8 · H.263, 1080p | ✅  |      ✅      |      ✅       |
@@ -78,6 +79,11 @@ bootloader, device tree, DKMS drivers, boot fixups — is sideloaded into it. No
 | Hardware watchdog                           | ✅  |      ✅      |      ✅       |
 | Serial console                              | ✅  |      ✅      |      ✅       |
 | Maskrom recovery over USB                   | ✅  |      ✅      |      ✅       |
+
+> **Composite needs a kernel Armbian does not ship.** `ROCKCHIP_DRM_TVE` is off in
+> `linux-rk35xx-vendor` and the encoder links into `rockchipdrm` rather than a module, so no `apt`
+> kernel can drive the AV jack. Analog audio on the same jack works on a stock kernel.
+> `docs/todo/rk35xx-cvbs-tve.md` has the rest.
 
 ## Build
 

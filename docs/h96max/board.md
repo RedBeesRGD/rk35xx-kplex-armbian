@@ -93,13 +93,29 @@ are claimed by the capability word but stay 🟡 — no encoder exists to make a
 
 The R69 measures within noise of every number above — same silicon, so neither box is an outlier.
 
-## AV jack — composite video
+## AV jack — composite video and analog audio
 
-❓ **Never seen working on any kernel Armbian ships.** `tve@ff880000` is `okay` from the factory and
-wired to VP1, but `ROCKCHIP_DRM_TVE` is off in `linux-rk35xx-vendor`, so nothing binds the node and
-no `card0-TV-1` connector exists. The tree now names NTSC 720x480i as the preferred mode and the
-kernel fork builds the driver; neither has been put in front of a TV. `docs/todo/rk35xx-cvbs-tve.md`
-holds the measurement behind that and the test to run.
+✅ **Both 2026-09-21.** The video half needs a kernel Armbian does not ship; the audio half does
+not.
+
+**Composite video** needs `CONFIG_ROCKCHIP_DRM_TVE=y`. The encoder links into `rockchipdrm` rather
+than a module, so no `apt` kernel drives it. With it, `card0-TV-1` appears and
+`/sys/kernel/debug/dri/0/summary` reads `720x480i59.94 type[48] flag[1015]` with `Fixed V` halved
+to 240. `rockchip,tvemode = <0x01>` is what makes NTSC preferred; `<0x00>` gives PAL 720x576i,
+untried here. `card0-TV-1` always reads `connected` — TVE has no detect line.
+
+**Analog audio** needs nothing beyond the stock kernel: `card 1: rk3528acodec`, `sai2` →
+`acodec@ffe10000`. Silent until both gains are raised, and they do not persist on their own.
+
+```sh
+amixer -c rk3528acodec sset 'DAC LEFT LINEOUT' 80%
+```
+
+PipeWire selects HDMI ahead of it, and separately remembers a per-application sink that outlives a
+change of default.
+
+A television crops every edge. A 640x480 image centred in 720x480 is inset 40 px each side
+horizontally and not at all vertically, so the top and bottom rows are what get lost.
 
 The recovery button is recessed inside this same socket, so a plug and a toothpick contend for it.
 

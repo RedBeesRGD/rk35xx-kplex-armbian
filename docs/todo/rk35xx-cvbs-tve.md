@@ -1,90 +1,95 @@
-# CVBS out on RK3528: the TVE driver is not in the Armbian kernel
+# CVBS out on RK3528: what it took, and what is still open
 
-`tve@ff880000` is `okay` in every factory blob here and wired to VP1, but **no kernel these boxes
-run has ever contained the driver that binds it**. The AV jack was marked 🟡 on the strength of the
-tree alone; it is ❓, and was never anything else.
+`tve@ff880000` is `okay` in every factory blob here and wired to VP1, but **no kernel Armbian ships
+contains the driver that binds it**. A kernel built with `CONFIG_ROCKCHIP_DRM_TVE=y` produces a
+picture and the jack's analog audio alongside it.
 
-Not board data — `tve@ff880000` is identical in `rk3528.dtsi` and in all three trees here. The two
-boards with a jack (R69, H96 Max) are both affected; the 3518D has no jack and disables the node.
+Not board data — `tve@ff880000` is identical in `rk3528.dtsi` and in all three trees here. A board
+with no AV jack disables the node; the boards that have one need everything below.
 
-## The finding
+## The two blockers
 
 `ROCKCHIP_DRM_TVE` is `bool` with no `default`, so a savedefconfig that omits it means _off_.
 Armbian's `linux-rk35xx-vendor.config` omits it. Resolved against the kernel tree, on the host:
 
 ```sh
-cp build/config/kernel/linux-rk35xx-vendor.config linux-kplex/.config
-make -C linux-kplex ARCH=arm64 olddefconfig
-grep ROCKCHIP_DRM_TVE linux-kplex/.config      # -> # CONFIG_ROCKCHIP_DRM_TVE is not set
+make -C <kernel> ARCH=arm64 olddefconfig   # after copying the config to .config
+grep ROCKCHIP_DRM_TVE <kernel>/.config     # -> # CONFIG_ROCKCHIP_DRM_TVE is not set
 ```
 
 `rockchipdrm-$(CONFIG_ROCKCHIP_DRM_TVE) += rockchip_drm_tve.o` links the encoder into `rockchipdrm`
-itself, so it cannot be a module and cannot be added to a running box — **CVBS needs a rebuilt
-kernel, not an overlay file.** An `apt` kernel will not have it.
+itself, so it cannot be a module and cannot be added to a running box — **composite needs a rebuilt
+kernel, not an overlay file.**
 
-`card0-TV-1 connected` in `stock/h96max-3518d/display.txt` is the factory Android kernel, which sets
-`CONFIG_ROCKCHIP_DRM_TVE=y`. It is not evidence about Armbian.
+**wlroots drops every interlaced mode when it builds a connector's mode list**, and both CVBS modes
+are interlaced, so a TV connector arrives advertising nothing:
 
-## What ships now
+```
+[backend/drm/drm.c:1646] Detected modes:
+[backend/drm/drm.c:980]  connector TV-1: Modesetting with 720x480 @ 59.710 Hz
+```
 
-| Where                                     | Change                                        |
-| ----------------------------------------- | --------------------------------------------- |
-| `build/config/kernel/linux-rk35xx-vendor` | `CONFIG_ROCKCHIP_DRM_TVE=y`                   |
-| `firmware/h96max/board.patch`             | `rockchip,tvemode = <0x01>` on `tve@ff880000` |
-| `patches/linux-rockchip/`                 | `drm-rockchip-tve-init-preferred-mode.patch`  |
+Nothing is listed, so the compositor selects nothing and the backend synthesises a progressive
+720x480 — `DRM_MODE_TYPE_USERDEF`, which composite cannot carry. `wlroots-keep-interlaced-tv-modes`
+in the kage tree keeps interlaced modes on `DRM_MODE_CONNECTOR_TV` and leaves every other connector
+on the existing path.
 
-The config line survives `make savedefconfig`, so the fork's kernel-config rewrite pass keeps it.
+## What the tree carries
 
-`rockchip,tvemode` picks which mode carries `DRM_MODE_TYPE_PREFERRED`: `00` is PAL 720x576i, `01` is
-NTSC 720x480i. Both stay in the connector's mode list whichever is set. The R69 does not carry the
-property yet.
+`rockchip,tvemode = <0x01>` on `tve@ff880000` — NTSC 720x480i preferred, `<0x00>` for PAL. Both
+modes stay in the list either way. A board without the property depends on the kernel patch instead.
 
-The property is what decides the standard here because **our U-Boot never touches `tve`** — no
-`uboot.dts` here has the node. Vendor U-Boot pins `route_tve` to 720x576@50 with overscan before
-handing over; ours leaves the mode to the kernel.
+The property is what decides the standard, because **no `uboot.dts` here has a `tve` node**. Vendor
+U-Boot pins `route_tve` to 720x576@50 with overscan before handing over; ours leaves it to the
+kernel.
 
-## The driver bug behind the property
+## Verified on the H96 Max, 2026-09-21
 
-`tve_parse_dt()` and `tve_parse_dt_legacy()` both declare `int ret, val` and assign
-`tve->preferred_mode` twice when `rockchip,tvemode` is absent — first `0`, then `val`, which
-`of_property_read_u32()` never wrote. `rockchip_tve_get_modes()` compares the result against the
-`cvbs_mode[]` index, so a stack-garbage value marks **neither** mode preferred and userspace takes
-whichever it enumerates first. Every vendor RK3528 tree here omits the property.
+`sudo cat /sys/kernel/debug/dri/0/summary` with a 640x480 compositor running:
 
-The patch assigns `val` in the absent branch. It is not applied by this repo; the DT graft makes it
-moot on the H96 Max, and the R69 needs one or the other.
+```
+Video Port1: ACTIVE     Connector:TV-1   Encoder: TV-338
+Display mode: 720x480i59.94   type[48] flag[1015]
+Fixed V: 240 240 243 262
+Esmart3-win0: src rect[640 x 480]  dst pos[40, 0] rect[640 x 480]  pitch: 2560
+```
+
+`type[48]` is `DRIVER | PREFERRED`, so `rockchip,tvemode` reached the tree. `flag[1015]` is
+`PHSYNC | PVSYNC | INTERLACE | DBLCLK`. `Fixed V` halved to 240 is the interlace split; a
+progressive mode leaves it at 480.
+
+Analog audio out of the same jack: `card 1: rk3528acodec`, `sai2` → `acodec@ffe10000`. Silent until
+`DAC LEFT LINEOUT` and `DAC RIGHT LINEOUT` are raised — both default low and neither persists
+without ALSA state. Nothing in the tree or the kernel config needed changing for it.
 
 ## What VP1 can drive
 
-`rk3528_vop_video_ports[1].max_output` is `{ 720, 576 }` — VP1 exists for CVBS and nothing else. Its
-planes are Esmart2 (cursor) and Esmart3 (primary); Esmart0 and Esmart1 are VP0-only, by
-`layer_sel_id`.
+`rk3528_vop_video_ports[1].max_output` is `{ 720, 576 }` and `dclk_max` 108 MHz — VP1 exists for
+CVBS and nothing else. Its planes are Esmart2 (cursor) and Esmart3 (primary); Esmart0 and Esmart1
+are VP0-only, by `layer_sel_id`.
 
-**The `esmart_lb_mode = [02]` graft does not cost VP1 anything.** `vop3_ignore_plane()` refuses only
-Esmart1 in `VOP3_ESMART_4K_2K_2K_MODE`, and Esmart2/Esmart3 lose half their line-buffer width — 2048
-px, still three times a CVBS line. HDMI 4K60 and CVBS do not compete.
+**The `esmart_lb_mode = [02]` graft costs VP1 nothing.** `vop3_ignore_plane()` refuses only Esmart1
+in `VOP3_ESMART_4K_2K_2K_MODE`, and Esmart2/Esmart3 lose half their line-buffer width — 2048 px,
+still three CVBS lines. HDMI 4K60 and composite do not contend.
 
 No tree here sets `rockchip,plane-mask`, so `bootloader_initialized` stays false and VOP2 assigns
-planes itself: Esmart0 to VP0, Esmart3 to VP1.
+Esmart0 to VP0 and Esmart3 to VP1 by itself.
 
-## Untested — what to do with a box
+## Open
 
-Needs a kernel built from the fork, installed over the `apt` one, and a TV with a composite input.
+**Overscan.** A television crops every edge. A 640x480 image centred in 720x480 is already inset 40
+px each side horizontally and **not at all vertically**, so the top and bottom rows are what get
+lost. The DRM margin properties are a post-scaler, not a crop — `post_scl_factor` and
+`POST_HORIZONTAL_SCALEDOWN_EN(hdisplay != hsize)` — so using them downscales the whole frame through
+a filter no plane-level property reaches. For pixel-exact content the answer is a safe-area contract
+in content, not compensation in the pipeline. `drm-rockchip-fbdev-inset-console-on-tv` covers the
+console only, and leaves every KMS client alone.
 
-```sh
-ls /sys/class/drm/                             # expect card0-TV-1 alongside card0-HDMI-A-1
-dmesg | grep -i tve
-sudo modetest -M rockchip -c                   # expect 720x480i and 720x576i on the TV connector
-sudo grep dclk_vp1 /sys/kernel/debug/clk/clk_summary
-```
+**PAL.** `rockchip,tvemode = <0x00>` selects 720x576i50. Never set here; nothing predicts a problem.
 
-Then confirm, in order: a picture on the jack at all; the right standard (`01` should give 480i);
-HDMI still correct with both connected; and whether a board whose recovery button sits recessed
-inside the AV socket can still be poked with a plug in it.
+**The three `drm-rockchip-*` patches are unbuilt.** `patches/linux-rockchip/README.md` says what
+each fixes.
 
-`card0-TV-1` will read `connected` with nothing plugged in — TVE has no detect line.
-
-## Analog audio is a separate question
-
-The jack carries composite video **and** analog audio. `acodec` and its sound card are untouched
-here and the AV jack's audio path has never been traced on any board. Nothing above tests it.
+**Default audio output.** A TV encoder has no detect line, so "is the AV cable in" is not knowable.
+HDMI reports a jack (`rockchip,jack-det` is already in the tree), so the implementable rule is HDMI
+when present, analog otherwise.

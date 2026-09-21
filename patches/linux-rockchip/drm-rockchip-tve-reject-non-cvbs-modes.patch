@@ -1,0 +1,80 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Artem Butusov <art.sormy@gmail.com>
+Date: Sun, 21 Sep 2026 00:00:00 +0000
+Subject: [PATCH] drm/rockchip: tve: reject modes the CVBS encoder cannot
+ produce
+
+rockchip_tve_get_modes() advertises exactly the two entries of cvbs_mode[],
+both DRM_MODE_FLAG_INTERLACE. Neither validation hook enforces that:
+rockchip_tve_mode_valid() returns MODE_OK for anything, and
+rockchip_tve_encoder_atomic_check() never looks at the mode at all.
+
+A client is not restricted to the probed list. A compositor that synthesises
+a timing - wlroots does this for a custom resolution - can hand the encoder a
+progressive 720x480 and have it accepted. The VOP then programs that timing
+verbatim, and on RK3528 the interlace halving disappears from the vertical
+side of the crtc state:
+
+  broken:  Display mode: 720x480p59.71   Fixed V: 480 483 493 500
+  working: Display mode: 720x480i59.94   Fixed V: 240 240 243 262
+
+CVBS carries no progressive format, so what leaves the DAC is not a signal
+any television can lock to.
+
+Add a single predicate for "this is one of the CVBS timings" and use it in
+both places, so an unrepresentable mode is dropped from the probed list and
+refused at commit rather than being encoded into noise.
+
+Signed-off-by: Artem Butusov <art.sormy@gmail.com>
+---
+diff --git a/drivers/gpu/drm/rockchip/rockchip_drm_tve.c b/drivers/gpu/drm/rockchip/rockchip_drm_tve.c
+index f34b6d882..a8327d252 100644
+--- a/drivers/gpu/drm/rockchip/rockchip_drm_tve.c
++++ b/drivers/gpu/drm/rockchip/rockchip_drm_tve.c
+@@ -154,11 +154,32 @@ rockchip_tve_get_modes(struct drm_connector *connector)
+ 	return count;
+ }
+ 
++/*
++ * The encoder drives CVBS and nothing else: the two entries in cvbs_mode[] are
++ * the only timings it can produce. A client is free to invent a mode and hand
++ * it straight to an atomic commit, so both the probe-time list and the commit
++ * path have to be told that.
++ */
++static bool rockchip_tve_mode_is_cvbs(const struct drm_display_mode *mode)
++{
++	int i;
++
++	if (!(mode->flags & DRM_MODE_FLAG_INTERLACE))
++		return false;
++
++	for (i = 0; i < ARRAY_SIZE(cvbs_mode); i++)
++		if (mode->hdisplay == cvbs_mode[i].hdisplay &&
++		    mode->vdisplay == cvbs_mode[i].vdisplay)
++			return true;
++
++	return false;
++}
++
+ static enum drm_mode_status
+ rockchip_tve_mode_valid(struct drm_connector *connector,
+ 			struct drm_display_mode *mode)
+ {
+-	return MODE_OK;
++	return rockchip_tve_mode_is_cvbs(mode) ? MODE_OK : MODE_BAD;
+ }
+ 
+ static struct drm_encoder *rockchip_tve_best_encoder(struct drm_connector
+@@ -556,6 +577,12 @@ rockchip_tve_encoder_atomic_check(struct drm_encoder *encoder,
+ 	struct drm_connector *connector = conn_state->connector;
+ 	struct drm_display_info *info = &connector->display_info;
+ 
++	if (!rockchip_tve_mode_is_cvbs(&crtc_state->adjusted_mode)) {
++		dev_dbg(tve->dev, "%s is not a CVBS mode\n",
++			crtc_state->adjusted_mode.name);
++		return -EINVAL;
++	}
++
+ 	s->output_mode = ROCKCHIP_OUT_MODE_P888;
+ 	s->output_type = DRM_MODE_CONNECTOR_TV;
+ 	if (info->num_bus_formats)

@@ -2134,3 +2134,64 @@ and VOP2 hands Esmart0 to VP0 and Esmart3 to VP1 by itself. HDMI 4K60 and CVBS d
 **Nothing here has been near a TV.** No box was touched: the kernel is not built, the DTB is not
 deployed, and the jack has never shown a picture. `docs/todo/rk35xx-cvbs-tve.md` carries what to
 run. Analog audio on the same jack is untouched and still unexamined.
+
+## 2026-09-21 — composite and the AV jack's audio, both working
+
+Closes the `AV jack analog audio and composite video — untested on both boards` item above.
+
+**Two wrong turns first.** `CONFIG_ROCKCHIP_DRM_TVE=y` went into
+`build/config/kernel/linux-rk35xx-vendor.config`, which the kplex builds never open: `BRANCH=kplex`
+makes `LINUXCONFIG=linux-rk35xx-kplex` by `common.conf:134`, and
+`prepare_kernel_config_core_or_userpatches()` takes `userpatches/config/kernel/` ahead of
+`config/kernel/`. The deb still said `# CONFIG_ROCKCHIP_DRM_TVE is not set`.
+
+Then, with the line in the right file, the rebuilt deb was installed and the box still had no
+driver. The kernel deb's version string carries a hash per input — `S` source, `D` drivers, `P`
+patches, **`C` config**, `H`, `HK`, `V`, `B` (`artifact-kernel.sh:178`). Two debs differed in
+exactly one component:
+
+```
+linux-image-kplex-rk35xx_..._6.1.172-Scb48-Df596-Pf663-C874c-...
+linux-image-kplex-rk35xx_..._6.1.172-Scb48-Df596-Pf663-C9637-...
+```
+
+`8` sorts before `9`, so `dpkg -i linux-image-kplex-rk35xx_*.deb` installed the **old** one last and
+it won. Both carry dpkg `Version: 26.11.0-trunk`, so `dpkg -l` cannot tell them apart —
+`/boot/config-$(uname -r)` is the only witness to which kernel is installed. `uname -r` cannot help
+either: Armbian builds the release string from `BRANCH` + `LINUXFAMILY`, so every kplex kernel is
+`6.1.172-kplex-rk35xx`.
+
+**`card0-TV-1` appeared, and cage produced garbage.** The compositor was driving `720x480p59.71`,
+`type[20]` — `DRM_MODE_TYPE_USERDEF`, a mode userspace invented. The TVE driver advertises only
+`cvbs_mode[]`, both interlaced, so it came from wlroots: its DRM backend drops every interlaced mode
+at `backend/drm/drm.c:1650`, TV-1 arrived advertising nothing, and the backend synthesised a
+progressive timing at the connector's current dimensions. `Detected modes:` with no lines under it
+is the whole diagnosis.
+
+Keeping interlaced modes on `DRM_MODE_CONNECTOR_TV` fixes it and needs no cage change: the existing
+`handle_new_output()` picks the preferred mode, which `rockchip,tvemode = <0x01>` makes 720x480i.
+
+```
+Display mode: 720x480i59.94   type[48] flag[1015]
+Fixed V: 240 240 243 262
+Esmart3-win0: src rect[640 x 480]  dst pos[40, 0] rect[640 x 480]  pitch: 2560
+```
+
+`pitch 2560` is 640x4 — the compositor's own buffer straight onto the plane, direct scanout, no
+sampler and no scaling. A 640x480 image in a 720x480 frame is inset 40 px each side horizontally and
+nothing vertically, which is where the overscan losses land.
+
+**Analog audio needed no kernel or tree change at all.** `CONFIG_SND_SOC_RK3528=y` and
+`CONFIG_SND_SOC_ROCKCHIP_SAI=y` are already set, and `acodec@ffe10000`, `sai2` and the
+`acodec-sound` card are `okay` from the factory. Three things stood between that and a sound:
+
+- both `DAC LEFT/RIGHT LINEOUT` gains default low, and the driver has no other controls
+- PipeWire ranks HDMI first, so the default sink is `alsa_output.platform-hdmi-sound.*`
+- WirePlumber's `restore-stream` remembers a sink **per application**, so changing the default and
+  restarting the app puts it straight back on HDMI. `pactl move-sink-input` is what updates that
+  memory; a restart does not.
+
+A 440 Hz `speaker-test` came out of the jack first, then doppler after the move.
+
+**Still open:** overscan on both the console and the compositor; PAL `<0x00>` never selected; and
+the three `drm-rockchip-*` patches are written but unbuilt.
