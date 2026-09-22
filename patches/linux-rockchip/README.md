@@ -26,14 +26,16 @@ so the work survives, and because the bugs they describe are visible on both boa
 **#524 is worth more than the rest combined for log hygiene.** One WARN at probe emits its call
 trace and register dump — ~416 lines, 78% of all err/warn on the R69 and 82% on the H96 Max.
 
-**The three `drm-rockchip-*` patches target a driver that now runs here, and none of them has been
-built.** `ROCKCHIP_DRM_TVE` is off in `linux-rk35xx-vendor`; a kernel built with it produces
-composite, so these bugs are reachable rather than theoretical, but each is still read out of the
-source. `docs/todo/rk35xx-cvbs-tve.md` holds the state and what a build has to show.
+**The two `drm-rockchip-tve-*` patches are built and running**, on a kernel with
+`CONFIG_ROCKCHIP_DRM_TVE=y` that Armbian does not ship. Neither can touch HDMI: `rockchip_drm_tve.c`
+drives composite and nothing else. They stay unsubmitted only until composite has run long enough
+here to say so with a date.
 
-The two `tve` patches cannot touch HDMI: `rockchip_drm_tve.c` drives composite and nothing else.
-`drm-rockchip-fbdev-inset-console-on-tv` is scoped by connector type and switched off with
-`rockchipdrm.fbdev_tv_margin=100`.
+**`drm-rockchip-fbdev-inset-console-on-tv` here is a corrected version that has not been built.**
+What ran inset the console on HDMI as well, because it asked connector status and a TV connector
+always reads connected while HDMI has not been probed when `fb_probe` runs; it also smeared while
+scrolling, from shrinking `xres_virtual` against `drm_fb_helper_check_var()`. This one reads the
+client's probed modesets instead. `rockchipdrm.fbdev_tv_margin=100` switches it off.
 
 **`mmc-dw-mmc-rockchip-per-host-inherit` stays unsubmitted: neither board can trigger the bug, and
 neither can be made to.** It needs two enabled `dw_mci` controllers both taking the v2 tuning path,

@@ -92,8 +92,8 @@ each fixes.
 
 **Default audio output ships, unverified across a reboot.** A TV encoder has no detect line, so "is
 the AV cable in" is not knowable; the implementable rule is HDMI when its connector reports
-connected, analog otherwise. `rk35xx-audio-select` writes that as sink priorities before any user
-session starts.
+connected, analog otherwise. `rk35xx-output-select` forces the losing connector off and writes
+matching sink priorities, before any user session starts.
 
 It does not use ALSA jack state, though the kernel has it: `rockchip,jack-det` is in the tree and
 `amixer -c 0 controls` shows `rockchip,hdmi Jack`. PipeWire never sees it — every card is a
@@ -102,5 +102,6 @@ port with `availability unknown` and the default-node picker has nothing to skip
 declaring the port and its `JackControl` would make availability work and make the script
 unnecessary; nobody has tried one.
 
-The WirePlumber setting names in `wireplumber-no-restore.conf` are unverified. `wpctl settings`
-lists what a build accepts.
+The WirePlumber setting names come from `wpctl settings` on the box; the first three shipped were
+guesses and all three were wrong. The names are `node.`-prefixed, and there is no
+`device.restore-props`.

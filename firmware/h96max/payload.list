@@ -57,9 +57,9 @@
 # hardware video codec: open the MPP/RGA/dma-heap nodes to group video (see docs/codec.md)
 0644 common/rk35xx-vpu.rules                         /etc/udev/rules.d/99-rk35xx-vpu.rules
 
-# audio out follows the live display, and the AV jack's analog gain is set at boot
-0755 common/rk35xx-audio-select                      /usr/local/sbin/rk35xx-audio-select
-0644 common/rk35xx-audio-select.service              /etc/systemd/system/rk35xx-audio-select.service
+# one live display: the losing connector is forced off, audio follows, analog gain set
+0755 common/rk35xx-output-select                     /usr/local/sbin/rk35xx-output-select
+0644 common/rk35xx-output-select.service             /etc/systemd/system/rk35xx-output-select.service
 0644 common/wireplumber-no-restore.conf              /etc/wireplumber/wireplumber.conf.d/50-rk35xx-no-restore.conf
 
 # stable names for the integrated inputs, and clear the Android-style BT rfkill soft block

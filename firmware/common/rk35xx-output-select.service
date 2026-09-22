@@ -1,0 +1,16 @@
+[Unit]
+# Both the forced connector and the generated drop-in have to be in place before
+# the session's compositor and wireplumber start
+Description=rk35xx live-display selection (video connector + audio sink)
+After=alsa-restore.service sound.target
+Before=systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/rk35xx-output-select
+# Environment=RK35XX_OUTPUT=hdmi
+# Environment=RK35XX_LINEOUT_GAIN=70%
+
+[Install]
+WantedBy=multi-user.target

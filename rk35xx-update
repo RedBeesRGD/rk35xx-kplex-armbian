@@ -8,7 +8,7 @@
 # The board is auto-detected from the identity dir; --board overrides. Every installed name derives
 # from the board's BOARD_PREFIX (see firmware/<board>/board.conf), which is rk35xx- on every board.
 #
-# Deliberately does NOT redo the one-time image-build steps (rebrand, the unit-enable drop-in, the
+# Deliberately does NOT redo the one-time image-build steps (rebrand, the
 # console/armbianEnv edit, board drop-ins) — those are already in place on a booted box, and the
 # Wi-Fi/Bluetooth fixups live in the board's first-boot script. The bootloader (idbloader/uboot.itb)
 # is never touched here; changing it on a live boot device is a separate, riskier operation.
@@ -122,6 +122,12 @@ migrate() {
 		rm -f /etc/modules-load.d/rk35xx.conf
 	fi
 
+	# rk35xx-audio-select grew into rk35xx-output-select; the old unit would fight the new one
+	for f in /etc/systemd/system/rk35xx-audio-select.service /usr/local/sbin/rk35xx-audio-select; do
+		if [ -e "$f" ]; then echo "  migrating: removing $f"; rm -f "$f"; fi
+	done
+	systemctl disable rk35xx-audio-select.service >/dev/null 2>&1 || true
+
 	# u-boot.itb was renamed to uboot.itb; the payload install right after this puts the new one in
 	if [ -e "$SHARE/u-boot.itb" ]; then
 		echo "  migrating: removing $SHARE/u-boot.itb"
@@ -142,6 +148,14 @@ while read -r mode src dest; do
   mv -f "$stage" "$dest"
 done < "$FW/$BOARD_PAYLOAD"
 "/usr/local/sbin/$P-boardname"   # re-assert the login-banner name (apt upgrades reset it)
+
+# BOARD_WANTS gains units over time and the image-build drop-in is a snapshot of the list as it was
+# then, so a box updated in place never starts anything added since.
+if [ -n "${BOARD_WANTS:-}" ]; then
+  mkdir -p /etc/systemd/system/multi-user.target.d
+  printf '[Unit]\nWants=%s\n' "$BOARD_WANTS" \
+    > "/etc/systemd/system/multi-user.target.d/10-$BOARD_HOSTNAME.conf"
+fi
 
 echo "[2/6] refreshing DKMS driver sources + rebuilding"
 # a board with no IR receiver ships neither the Makefile nor dkms.conf that the fetch needs

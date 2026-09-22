@@ -2225,3 +2225,46 @@ Branches exercised on the host against a faked sysfs tree: connected → HDMI 20
 disconnected and connector-absent → analog 2000 / HDMI 1000. **Nothing here has been run on the box
 or across a reboot**, and the three `wireplumber.settings` key names are unverified —
 `wpctl settings` lists what a build accepts.
+
+## 2026-09-21 — one live display, chosen at boot, everything downstream of it
+
+Three HDMI regressions the same evening, two of them one cause: **`card0-TV-1` always reads
+connected, so enabling TVE gave the box two live outputs where it had one.**
+
+- doppler ran fast and unevenly. `handle_virtual_output_frame()` schedules a frame on every enabled
+  physical output, so HDMI at 60 Hz and TV-1 at 59.94 Hz each drove a virtual-output commit —
+  roughly double the ticks, beating. `scene_tick()` advances per frame, so the speed followed.
+- the console came up inset on HDMI. `rockchip_fbdev_console_on_tv()` asked
+  `connector->status == connector_status_connected` for the non-TV connectors, and HDMI has not been
+  probed by the time `fb_probe` runs, so "a TV exists and nothing else is connected" was true every
+  boot. It also smeared while scrolling: shrinking `xres_virtual` fights
+  `drm_fb_helper_check_var()`, which resets it to the framebuffer width on the first `set_par` while
+  `fix.line_length` stays put.
+
+The fbdev detection now reads the client's probed modesets — where the console is actually displayed
+— and `drm_client_modeset_probe()` has already run at `fb_probe`. `xres_virtual` is left alone.
+
+Third regression: HDMI audio silent. `rk35xx-audio-select.service` had never run. `rk35xx-update`
+line 11 says it deliberately skips the one-time image-build steps, and the unit-enable drop-in is
+one of them — `BOARD_WANTS` is a snapshot taken when the image was built, so a unit added later
+installs and is never enabled. It now rewrites that drop-in on every update.
+
+**All three `wireplumber.settings` names shipped this afternoon were wrong.** `wpctl settings` lists
+the real ones, which are `node.`-prefixed: `node.stream.restore-target`, `node.stream.restore-props`
+and `node.restore-default-targets`. There is no `device.restore-props`. The third was the one that
+mattered and I had not shipped it at all — it replays the default sink, so an afternoon's
+`pactl set-default-sink` outranked everything the script wrote.
+
+`rk35xx-audio-select` becomes `rk35xx-output-select` and now forces the losing connector off with
+`/sys/class/drm/<connector>/status`, which is what makes the compositor see one screen. Detection
+happens once, and the connector, the sink ranking and the analog gain all follow it.
+`RK35XX_OUTPUT=hdmi|tv` overrides. The old paths are removed in `migrate()`.
+
+Branches exercised on the host against a faked sysfs tree: HDMI connected → hdmi, TV parked, HDMI
+sink 2000. HDMI disconnected → tv, HDMI parked, HDMI sink 1000. **No TV connector and HDMI
+disconnected → nothing parked**, or a board with one connector and no cable at boot would force its
+only output off permanently. `RK35XX_OUTPUT=hdmi` over a disconnected HDMI → hdmi.
+
+**Not run on the box.** Composite also died for half an hour tonight and was a loose AV plug —
+`summary` reported a flawless 720x480i modeset into it the whole time. TVE has no detect line, so a
+bad contact and a driver fault look identical from software.
