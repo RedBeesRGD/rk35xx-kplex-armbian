@@ -2268,3 +2268,51 @@ only output off permanently. `RK35XX_OUTPUT=hdmi` over a disconnected HDMI → h
 **Not run on the box.** Composite also died for half an hour tonight and was a loose AV plug —
 `summary` reported a flawless 720x480i modeset into it the whole time. TVE has no detect line, so a
 bad contact and a driver fault look identical from software.
+
+## 2026-09-21 — the second connector was breaking the HDMI console all along
+
+The "small console with artifacting" reported after composite came up was never the overscan inset,
+and never the television. Two measurements settled it:
+
+```
+sudo cat /sys/kernel/debug/dri/0/summary   # 1920x1080p60, Esmart0 dst pos[0,0] rect[1920x1080]
+cat /sys/class/graphics/fb0/virtual_size   # 1920,1080
+sudo stty -F /dev/tty1 size                # 30 90
+```
+
+The pipeline paints the whole panel at native resolution. 30 rows × 90 columns at the 8x16 console
+font is **720x480 exactly** — the composite mode — on an HDMI boot.
+
+`drm_fb_helper` sizes `surface_width/height` to the largest mode across the probed modesets and
+`fb_width/fb_height` to the **smallest**, so a cloned console is wholly visible on every output
+(`__drm_fb_helper_find_sizes()`, the `min_t`/`max_t` pair). `drm_fb_helper_fill_var()` then sets
+`var.xres`/`var.yres` from `fb_width`/`fb_height` and `xres_virtual`/`yres_virtual` from the
+framebuffer. `rockchip_tve_connector_detect()` returns `connector_status_connected`
+unconditionally — a TV encoder has no detect line — so TV-1 is in that probe on **every** boot, and
+the console is laid out for composite whatever is plugged in.
+
+The artifacting follows from the same numbers. `fix.ypanstep` is 1 and `yres_virtual` (1080) is more
+than twice `yres` (480), so fbcon scrolls by panning: `fb_pan_display` validates only
+`yoffset + yres <= yres_virtual`, moves the CRTC's scanout origin down a buffer with no rows to
+spare, and the display eats itself on every scroll. "Someone chewing on the framebuffer every time
+you type" was an exact description.
+
+This dates the regression to `CONFIG_ROCKCHIP_DRM_TVE=y` giving the box a second connector, not to
+any patch. It also explains why forcing TV-1 off afterwards does not help: the hotplug re-runs
+`drm_client_modeset_probe`, but `fb_probe` is not called again and `drm_fb_helper_fill_var()` never
+re-runs, so `var` keeps its boot-time values for the life of the boot.
+
+`drm-rockchip-fbdev-size-console-to-display` replaces `drm-rockchip-fbdev-inset-console-on-tv`. It
+takes the console's geometry from the modesets — the largest non-TV mode when anything else is
+driving the console, the TV's own mode when it is alone — and folds the overscan inset into the same
+patch, so there is one patch and one reason for the console's size. Whenever the console ends up
+smaller than its buffer it clears `fix.xpanstep`/`ypanstep`, which is the only durable way to stop
+the panning: pinning `xres_virtual` does not survive `drm_fb_helper_check_var()`.
+
+Verified on the host: the patch applies to a pristine `rockchip_drm_fbdev.c` (base blob `6f5aca5`),
+and `rockchip_fbdev_console_mode()` compiles `-Wall -Wextra` clean and returns 1920x1080/false for
+HDMI+TV, 720x480/true for TV alone, 1920x1080/false for HDMI alone, and leaves the seeded values
+untouched when no modeset carries a mode. Expected on the box: `67 240` on HDMI, `24 72` on
+composite at the default 80% margin.
+
+**Not run on the box.**

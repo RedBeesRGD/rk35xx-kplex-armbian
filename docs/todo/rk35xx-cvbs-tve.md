@@ -82,8 +82,25 @@ px each side horizontally and **not at all vertically**, so the top and bottom r
 lost. The DRM margin properties are a post-scaler, not a crop — `post_scl_factor` and
 `POST_HORIZONTAL_SCALEDOWN_EN(hdisplay != hsize)` — so using them downscales the whole frame through
 a filter no plane-level property reaches. For pixel-exact content the answer is a safe-area contract
-in content, not compensation in the pipeline. `drm-rockchip-fbdev-inset-console-on-tv` covers the
-console only, and leaves every KMS client alone.
+in content, not compensation in the pipeline. `drm-rockchip-fbdev-size-console-to-display` covers
+the console only, and leaves every KMS client alone.
+
+**A second connector breaks the HDMI console, and that is not optional to fix.** `drm_fb_helper`
+sizes fbcon to the smallest mode across the probed modesets and the buffer to the largest. The TV
+connector has no detect line and always reads connected, so every HDMI boot on a board with an AV
+jack lays the console out at 720x480 inside a 1920x1080 framebuffer and then pans over the rest of
+it, corrupting the display on every scroll:
+
+```
+/sys/class/graphics/fb0/virtual_size   1920,1080
+sudo stty -F /dev/tty1 size            30 90     # = 720x480 at 8x16
+```
+
+`rk35xx-output-select` forcing the loser off afterwards does not undo it. The hotplug re-runs
+`drm_client_modeset_probe`, but `fb_probe` is not called again and `drm_fb_helper_fill_var()` never
+re-runs, so `var.xres`/`var.yres` keep the boot-time values for the life of the boot.
+`drm-rockchip-fbdev-size-console-to-display` fixes the sizing and folds the overscan inset into the
+same patch.
 
 **PAL.** `rockchip,tvemode = <0x00>` selects 720x576i50. Never set here; nothing predicts a problem.
 

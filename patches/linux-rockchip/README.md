@@ -15,7 +15,7 @@ so the work survives, and because the bugs they describe are visible on both boa
 | `mmc-dw-mmc-rockchip-per-host-inherit`   | not submitted | `static bool inherit` in `dw_mci_v2_execute_tuning()` — **not needed here** |
 | `drm-rockchip-tve-init-preferred-mode`   | not submitted | an uninitialised `preferred_mode` when `rockchip,tvemode` is absent         |
 | `drm-rockchip-tve-reject-non-cvbs-modes` | not submitted | a synthesised progressive mode accepted by a CVBS-only encoder              |
-| `drm-rockchip-fbdev-inset-console-on-tv` | not submitted | a console whose edges a television overscans off the tube                   |
+| `drm-rockchip-fbdev-size-console-to-display` | not submitted | a console sized to the composite mode on every boot, HDMI or not        |
 
 [523]: https://github.com/armbian/linux-rockchip/pull/523
 [524]: https://github.com/armbian/linux-rockchip/pull/524
@@ -31,11 +31,22 @@ trace and register dump — ~416 lines, 78% of all err/warn on the R69 and 82% o
 drives composite and nothing else. They stay unsubmitted only until composite has run long enough
 here to say so with a date.
 
-**`drm-rockchip-fbdev-inset-console-on-tv` here is a corrected version that has not been built.**
-What ran inset the console on HDMI as well, because it asked connector status and a TV connector
-always reads connected while HDMI has not been probed when `fb_probe` runs; it also smeared while
-scrolling, from shrinking `xres_virtual` against `drm_fb_helper_check_var()`. This one reads the
-client's probed modesets instead. `rockchipdrm.fbdev_tv_margin=100` switches it off.
+**`drm-rockchip-fbdev-size-console-to-display` is not a cosmetic patch — without it, enabling the
+TV encoder breaks the HDMI console.** `drm_fb_helper` sizes fbcon to the smallest mode across the
+probed modesets and the buffer to the largest, so a board with a TV connector — which always reads
+connected, having no detect line — gets a 720x480 console in the corner of a 1920x1080 framebuffer
+that fbcon then pans over, corrupting the display on every scroll. Measured on the H96 Max:
+`fb0/virtual_size` `1920,1080` against `stty -F /dev/tty1 size` `30 90`.
+
+The patch takes the console's geometry from the modesets — the largest non-TV mode when anything
+else is driving it, the TV's own mode when it is alone — and inset the TV-only case for overscan.
+`rockchipdrm.fbdev_tv_margin=100` switches the inset off; the sizing fix is unconditional.
+
+It supersedes `drm-rockchip-fbdev-inset-console-on-tv`, which did the inset and nothing else. Two
+earlier attempts at that are worth not repeating: reading `connector->status` inset the HDMI console
+too, because a TV connector always reads connected while HDMI has not been probed when `fb_probe`
+runs, and shrinking `xres_virtual` to stop the panning does not hold — `drm_fb_helper_check_var()`
+restores it on every `set_par`. Clearing `fix.xpanstep`/`ypanstep` does hold.
 
 **`mmc-dw-mmc-rockchip-per-host-inherit` stays unsubmitted: neither board can trigger the bug, and
 neither can be made to.** It needs two enabled `dw_mci` controllers both taking the v2 tuning path,
