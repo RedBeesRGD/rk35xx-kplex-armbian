@@ -20,24 +20,25 @@ silkscreen, an eMCP (DRAM and eMMC in one package), and the RK3528 proper rather
 
 ## Status
 
-| Hardware                       | State | Evidence                                                    |
-| ------------------------------ | ----- | ----------------------------------------------------------- |
-| Boot from SD                   | ✅    | with the H96 Max image: its loader pair and DTB             |
-| Ethernet 10/100                | ✅    | `end0` 100Mbps/Full on the H96 Max DTB — node identical     |
-| USB 2.0 keyboard               | ✅    | `usb 4-1` enumerated on the H96 Max DTB                     |
-| Composite video                | ✅    | reported working on the H96 Max DTB — `tve` node identical  |
-| AV-jack analog audio           | ✅    | reported working on the H96 Max DTB — `acodec` identical    |
-| Output select at boot          | ✅    | reported working on the H96 Max DTB                         |
-| Wi-Fi / BT on the H96 Max DTB  | ❌    | `GPIOOUT:108 cannot be operated` — see `dtb.md`             |
-| Wi-Fi / BT, factory power path | ❌    | enable held low; no SDIO card — see `dtb.md`                |
-| Wi-Fi / BT, pwrseq power path  | 🟡    | the H96 Max DTB's sequence, which enumerated it on this box |
-| Other USB port                 | ❓    | VBUS is gpio4 B4 here, B5 on the H96 Max                    |
-| RTC                            | ❓    |                                                             |
-| IR remote keymap               | 🟡    | factory `ir_key*` tables carried unchanged                  |
-| LEDs                           | 🟡    | inverted on the H96 Max DTB, which drives them active-low   |
-| VP9 hardware decode            | ❓    | tree says `rk3528`, which MPP treats as having no VP9       |
-| Serial console                 | ❓    | pads not located                                            |
-| Maskrom button in U-Boot       | ❓    | borrows the H96 Max `uboot.itb`                             |
+| Hardware                       | State | Evidence                                                   |
+| ------------------------------ | ----- | ---------------------------------------------------------- |
+| Boot from SD                   | ✅    | with the H96 Max image: its loader pair and DTB            |
+| Ethernet 10/100                | ✅    | `end0` 100Mbps/Full on the H96 Max DTB — node identical    |
+| USB 2.0 keyboard               | ✅    | `usb 4-1` enumerated on the H96 Max DTB                    |
+| Composite video                | ✅    | reported working on the H96 Max DTB — `tve` node identical |
+| AV-jack analog audio           | ✅    | reported working on the H96 Max DTB — `acodec` identical   |
+| Output select at boot          | ✅    | reported working on the H96 Max DTB                        |
+| Wi-Fi / BT on the H96 Max DTB  | ❌    | `GPIOOUT:108 cannot be operated` — see `dtb.md`            |
+| Wi-Fi / BT, factory power path | ❌    | enable held low; no SDIO card — see `dtb.md`               |
+| Wi-Fi, pwrseq power path       | ✅    | `wlan0` up and connected, reported 2026-09-25              |
+| Bluetooth                      | ❓    |                                                            |
+| Other USB port                 | ❓    | VBUS is gpio4 B4 here, B5 on the H96 Max                   |
+| RTC                            | ❓    |                                                            |
+| IR remote keymap               | 🟡    | factory `ir_key*` tables carried unchanged                 |
+| LEDs                           | 🟡    | inverted on the H96 Max DTB, which drives them active-low  |
+| VP9 hardware decode            | ❓    | tree says `rk3528`, which MPP treats as having no VP9      |
+| Serial console                 | ❓    | pads not located                                           |
+| Maskrom button in U-Boot       | ❓    | borrows the H96 Max `uboot.itb`                            |
 
 ## Known gaps
 

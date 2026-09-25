@@ -81,20 +81,24 @@ bootloader, device tree, DKMS drivers, boot fixups — is sideloaded into it. No
 | Serial console                              | ✅  |      ✅      |      ✅       |      ❓      |
 | Maskrom recovery over USB                   | ✅  |      ✅      |      ✅       |      ❓      |
 
-> **Composite needs a kernel Armbian does not ship.** `ROCKCHIP_DRM_TVE` is off in
-> `linux-rk35xx-vendor` and the encoder links into `rockchipdrm` rather than a module, so no `apt`
-> kernel can drive the AV jack. Analog audio on the same jack works on a stock kernel.
-> `docs/todo/rk35xx-cvbs-tve.md` has the rest.
+> **Composite needs the kplex kernel.** `ROCKCHIP_DRM_TVE` is off in Armbian's `linux-rk35xx-vendor`
+> and the encoder links into `rockchipdrm` rather than a module, so a stock base cannot drive the AV
+> jack. Analog audio on the same jack works on either kernel.
 
 ## Build
 
-Needs a stock ROCK 2F `.img.xz` (tested: `minimal` vendor 6.1), and a **microSD** (8 GB+) on the
-boxes that have a slot — the rest take the same image over USB, below.
+Needs a ROCK 2F base `.img.xz`, and a **microSD** (8 GB+) on the boxes that have a slot — the rest
+take the same image over USB, below.
+
+| Base                                             | Kernel                | Composite |
+| ------------------------------------------------ | --------------------- | --------- |
+| stock Armbian ROCK 2F, `minimal`                 | Armbian's vendor 6.1  | no        |
+| `kplex-userpatches/build-base-image.sh` (Docker) | `linux-kplex`, pinned | yes       |
 
 ```bash
 brew install xz coreutils                    # macOS  ·  apt install xz-utils on Debian
 ./build-e2tools.sh                           # once — stock e2tools corrupts an image on delete
-./build-image.sh Armbian_..._Rock-2f_..._minimal.img.xz h96max   # r69 | h96max | h96max-3518d
+./build-image.sh Armbian_..._Rock-2f_..._minimal.img.xz hs86-mini13   # any firmware/<board>
 ```
 
 ~1 minute, no Docker, no kernel build. Output: `Armbian_..._-<board>.img`.

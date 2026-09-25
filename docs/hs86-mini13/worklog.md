@@ -48,3 +48,8 @@ Grafts replaced: `wifi-en` disabled, `sdio-pwrseq` given the H96 Max's `reset-gp
 delay, `wireless-wlan` disabled because rfkill-wlan drives the same pin active-high. The H96 Max's
 `clkm1_32k_out` is not carried: it is gpio1 C3, the other variant's Wi-Fi bank, and no HS86 blob
 routes it.
+
+## 2026-09-25 — Wi-Fi up on the pwrseq power path
+
+`rk35xx-update` with the `sdio-pwrseq` grafts: the card enumerates and `wlan0` connects, reported
+from the box. Bluetooth not looked at.
