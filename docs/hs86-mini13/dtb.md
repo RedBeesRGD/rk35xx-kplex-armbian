@@ -38,7 +38,9 @@ Base: the box's factory Android DTB, carved from the eMMC `boot` partition
 | `pwm@ffa90030` (IR) | `remote_support_psci` `0` → `1`                         | IR as ATF wake source                                         |
 | `watchdog@ffac0000` | `status` → `okay`                                       | `/dev/watchdog` for systemd's `RuntimeWatchdogSec`            |
 | `mmc@ffc30000` (SD) | `sd-uhs-sdr12/25/50/104` **removed**                    | SD is this box's root; the H96 Max lost it on warm reset      |
-| `wifi-en`           | `regulator-always-on` added                             | 🟡 no consumer, so it is switched off as unused ~30 s in      |
+| `wifi-en`           | `status` → `disabled`                                   | its active-low enable holds the chip off                      |
+| `sdio-pwrseq`       | `reset-gpios` gpio3 B2, `post-power-on-delay-ms` 200    | 🟡 powers the chip with the SDIO host, as the H96 Max's does  |
+| `wireless-wlan`     | `status` → `disabled`                                   | Android's rfkill-wlan; drives the same enable pin             |
 | `gpio-leds`         | `pwr-green`/`pwr-red` → `power`/`standby`               | the shared LED hooks' names                                   |
 | `gpio-leds/power`   | `retain-state-suspended`, `retain-state-shutdown` added | the hooks, not the LED core, own it across sleep and poweroff |
 | `chosen`            | **removed**                                             | u-boot supplies bootargs; the factory string names `ttyFIQ0`  |
@@ -61,13 +63,26 @@ The factory `seekwcn_sv6160lite` node sets no GPIOs, so `skw_sdio_chk_cp_gpio_cf
 `gpio_in and gpio_out no config` exit instead. The oops that follows at `hci_power_off` is `skwbt`
 closing a port the failed boot never set up — a driver bug reached only through that failure.
 
-## The `wifi-en` graft
+## Powering the chip
 
-Power comes from `wifi-en`, a `regulator-fixed` on gpio3 B2 with `regulator-boot-on`. Nothing names
-it as a supply — `sdio-pwrseq` carries only its pinctrl — and without `regulator-always-on`,
-`of_get_regulation_constraints()` grants `REGULATOR_CHANGE_STATUS`, so `regulator_late_cleanup()`
-switches it off. Drop the graft if Wi-Fi survives a minute without it.
+The Seekwave enable, gpio3 B2, is **active-high** — driven high it powers the chip. The H96 Max tree
+does that through `sdio-pwrseq` `reset-gpios = <&gpio3 0x0a GPIO_ACTIVE_LOW>`, and on this box that
+tree enumerated the card at 14.7 s. The factory tree instead describes the pin as `wifi-en`, a
+`regulator-fixed` with `enable-active-low`: Linux enables it by driving the pin **low**, and nothing
+else raises it, so no card ever appears on `mmc@ffc20000`:
+
+```
+gpio-106 (                    |wifi-en             ) out lo ACTIVE LOW
+[SKWSDIO ERROR] skw_sdio_scan_card: wait scan card time out
+Failed to insert module 'skw_sdio_lite': No such device
+```
+
+Android presumably raises it from its own Wi-Fi driver through `wireless-wlan` (`WIFI,poweren_gpio`,
+active-high). The grafts hand the pin to `sdio-pwrseq` with the H96 Max's polarity and delay, and
+retire the two nodes that would contend for it.
 
 ## Tried and reverted
 
-None yet.
+| Node      | Change tried                | Outcome                                                              |
+| --------- | --------------------------- | -------------------------------------------------------------------- |
+| `wifi-en` | `regulator-always-on` added | chip held off permanently — the regulator's enabled state is pin low |

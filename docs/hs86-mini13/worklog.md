@@ -30,3 +30,21 @@ left off. Round-trip clean; the patched tree differs from factory in exactly the
 U-Boot is borrowed from the H96 Max (it booted this box); the factory U-Boot DTB was not collected.
 
 **Nothing from this directory has run on the box yet.**
+
+## 2026-09-25 — first boot on its own tree: boots, no Wi-Fi
+
+Boots from SD with `board.dtb` and the board directory; `model` reads back
+`HS86 Mini 13 RK35X8-EMCP-347-01-V1.0`. No SDIO card at all — `/sys/bus/sdio/devices` empty,
+`skw_sdio_lite` fails to insert with `No such device` after `wait scan card time out`.
+
+`gpio-106 wifi-en out lo ACTIVE LOW`. On the H96 Max tree, which enumerated the chip on this box,
+the same pin is `sdio-pwrseq` `reset-gpios` active-low, i.e. **high** once the host powers up. The
+enable is active-high; the factory `wifi-en` regulator is active-low, so enabling it — and the
+`regulator-always-on` graft from the previous entry kept it enabled — holds the chip off. The
+earlier reasoning about late cleanup was right about the mechanism and wrong about the polarity:
+left alone, cleanup would have "disabled" it into powering the chip, ~30 s too late for the scan.
+
+Grafts replaced: `wifi-en` disabled, `sdio-pwrseq` given the H96 Max's `reset-gpios` and 200 ms
+delay, `wireless-wlan` disabled because rfkill-wlan drives the same pin active-high. The H96 Max's
+`clkm1_32k_out` is not carried: it is gpio1 C3, the other variant's Wi-Fi bank, and no HS86 blob
+routes it.

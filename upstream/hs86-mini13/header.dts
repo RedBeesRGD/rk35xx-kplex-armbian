@@ -23,8 +23,11 @@
  *   watchdog@ffac0000  enabled, for systemd's RuntimeWatchdogSec
  *   sdmmc              sd-uhs-* dropped; the card is this box's root, and UHS cards can
  *                      fail to re-initialise after a warm reset
- *   wifi-en            regulator-always-on; nothing names it as a supply, so it is
- *                      otherwise switched off as unused and the Wi-Fi chip with it
+ *   wifi-en            disabled; declared active-low, it holds the active-high Wi-Fi
+ *                      enable off
+ *   sdio-pwrseq        reset-gpios gpio3 B2 active-low and a 200 ms post-power-on delay,
+ *                      so the chip is powered with the SDIO host
+ *   wireless-wlan      disabled; the vendor rfkill-wlan drives the same enable pin
  *   leds               power/standby labels, renamed from the vendor's pwr-green and
  *                      pwr-red; power gains retain-state-suspended/-shutdown
  *   chosen             dropped; u-boot supplies bootargs, and the vendor string names

@@ -99,17 +99,38 @@
  		vqmmc-supply = <&vccio_sd>;
  		vmmc-supply = <&vcc_sd>;
  		phandle = <0x115>;
-@@ -4290,6 +4301,9 @@
- 	wifi_en: wifi-en {
- 		compatible = "regulator-fixed";
- 		regulator-boot-on;
-+		/* no node consumes this supply, so the regulator core switches it off as unused
-+		 * ~30 s after boot, taking the Seekwave chip with it */
-+		regulator-always-on;
- 		enable-active-low;
- 		gpio = <&gpio3 0x0a 0x01>;
- 		regulator-name = "wifi_en";
-@@ -4362,13 +4376,18 @@
+@@ -4296,6 +4307,9 @@
+ 		regulator-min-microvolt = <0x325aa0>;
+ 		regulator-max-microvolt = <0x325aa0>;
+ 		vin-supply = <&vcc_3v3_s3>;
++		/* declared active-low, but the Seekwave enable is active-high: enabled, this holds
++		 * the chip off. sdio-pwrseq below owns the pin instead */
++		status = "disabled";
+ 		phandle = <0x1c8>;
+ 	};
+ 
+@@ -4303,6 +4317,10 @@
+ 		compatible = "mmc-pwrseq-simple";
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&wifi_enable_h>;
++		/* power the chip up with the SDIO host and give it 200 ms before the first scan;
++		 * nothing else raises its active-high enable, so without this no card appears */
++		reset-gpios = <&gpio3 0x0a 0x01>;
++		post-power-on-delay-ms = <0xc8>;
+ 		phandle = <0x7d>;
+ 	};
+ 
+@@ -4326,7 +4344,8 @@
+ 		pinctrl-0 = <&wifi_host_wake_irq>;
+ 		WIFI,host_wake_irq = <0xa5 0x0b 0x00>;
+ 		WIFI,poweren_gpio = <&gpio3 0x0a 0x00>;
+-		status = "okay";
++		/* Android's rfkill-wlan: drives the same enable pin sdio-pwrseq now owns */
++		status = "disabled";
+ 		phandle = <0x1ca>;
+ 	};
+ 
+@@ -4362,13 +4381,18 @@
  			default-state = "off";
  		};
  
@@ -130,7 +151,7 @@
  			gpios = <&gpio4 0x0b 0x00>;
  			linux,default-trigger = "none";
  			default-state = "off";
-@@ -4383,10 +4402,7 @@
+@@ -4383,10 +4407,7 @@
  		phandle = <0x1ce>;
  	};
  
@@ -142,7 +163,7 @@
  
  	fiq-debugger {
  		compatible = "rockchip,fiq-debugger";
-@@ -4397,7 +4413,8 @@
+@@ -4397,7 +4418,8 @@
  		interrupts = <0x00 0xba 0x04>;
  		pinctrl-names = "default";
  		pinctrl-0 = <&uart0m0_xfer>;
