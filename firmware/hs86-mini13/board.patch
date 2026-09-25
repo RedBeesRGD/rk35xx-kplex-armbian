@@ -1,0 +1,154 @@
+--- board.dts
++++ armbian.dts
+@@ -5,7 +5,7 @@
+ 	interrupt-parent = <&gic>;
+ 	#address-cells = <0x02>;
+ 	#size-cells = <0x02>;
+-	model = "Rockchip RK3528 X88PRO DDR4 V10 Board";
++	model = "HS86 Mini 13 RK35X8-EMCP-347-01-V1.0";
+ 
+ 	aliases {
+ 		ethernet0 = "/ethernet@ffbd0000";
+@@ -924,6 +924,9 @@
+ 			mode-charge = <0x5242c30b>;
+ 			mode-fastboot = <0x5242c309>;
+ 			mode-loader = <0x5242c301>;
++			/* `reboot maskrom` from the OS: the factory SPL reads this register
++			 * on the way up and hands to the BootROM — no button, no serial */
++			mode-maskrom = <0xef08a53c>;
+ 			mode-normal = <0x5242c300>;
+ 			mode-recovery = <0x5242c303>;
+ 			mode-ums = <0x5242c30c>;
+@@ -1002,9 +1005,10 @@
+ 		compatible = "arm,mali-450";
+ 		reg = <0x00 0xff700000 0x00 0x40000>;
+ 		interrupts = <0x00 0x58 0x04 0x00 0x59 0x04 0x00 0x56 0x04 0x00 0x5c 0x04 0x00 0x5d 0x04 0x00 0x5a 0x04 0x00 0x5b 0x04>;
+-		interrupt-names = "Mali_GP_IRQ", "Mali_GP_MMU_IRQ", "IRQPP", "Mali_PP0_IRQ", "Mali_PP0_MMU_IRQ", "Mali_PP1_IRQ", "Mali_PP1_MMU_IRQ";
+-		clocks = <&scmi_clk 0x16 &cru 0x113 &cru 0x10e>;
+-		clock-names = "clk_mali", "aclk_gpu_mali", "pclk_gpu";
++		/* names mainline lima expects; the vendor Mali blob used its own */
++		interrupt-names = "gp", "gpmmu", "pp", "pp0", "ppmmu0", "pp1", "ppmmu1";
++		clocks = <&cru 0x113 &cru 0x113>;
++		clock-names = "bus", "core";
+ 		assigned-clocks = <&scmi_clk 0x16>;
+ 		assigned-clock-rates = <0x11e1a300>;
+ 		power-domains = <&power 0x04>;
+@@ -1276,7 +1280,8 @@
+ 		iommus = <&vop_mmu>;
+ 		rockchip,grf = <&grf>;
+ 		status = "okay";
+-		esmart_lb_mode = [03];
++		/* factory 03 caps every Esmart window at 2K; 02 gives Esmart0 a 4K line buffer */
++		esmart_lb_mode = [02];
+ 		support-multi-area;
+ 		phandle = <0xea>;
+ 
+@@ -1456,6 +1461,9 @@
+ 		rockchip,lumafilter6 = <0xf830df7>;
+ 		rockchip,lumafilter7 = <0x8de055f>;
+ 		rockchip,tve-upsample = <0x02>;
++		/* 01 = NTSC 720x480i preferred, 00 = PAL 720x576i - both stay in the mode list.
++		 * Absent, the vendor driver reads an uninitialised value and prefers neither. */
++		rockchip,tvemode = <0x01>;
+ 		rockchip,grf = <&grf>;
+ 		nvmem-cells = <&vdac_out_current &test_version>;
+ 		nvmem-cell-names = "out-current", "version";
+@@ -1580,7 +1588,10 @@
+ 		reg-shift = <0x02>;
+ 		reg-io-width = <0x04>;
+ 		dmas = <&dmac 0x09 &dmac 0x08>;
+-		status = "disabled";
++		/* the debug header, as ttyS0; fiq-debugger below gives up this same UART */
++		pinctrl-names = "default";
++		pinctrl-0 = <&uart0m0_xfer>;
++		status = "okay";
+ 		phandle = <0xf3>;
+ 	};
+ 
+@@ -1852,7 +1863,8 @@
+ 		status = "okay";
+ 		remote_pwm_id = <0x03>;
+ 		handle_cpu_id = <0x01>;
+-		remote_support_psci = <0x00>;
++		/* IR as an ATF wake source, so the remote can power the box on */
++		remote_support_psci = <0x01>;
+ 		phandle = <0x105>;
+ 
+ 		ir_key4 {
+@@ -1973,7 +1985,8 @@
+ 		clocks = <&cru 0x73 &cru 0x72>;
+ 		clock-names = "tclk", "pclk";
+ 		interrupts = <0x00 0x1c 0x04>;
+-		status = "disabled";
++		/* /dev/watchdog for systemd RuntimeWatchdogSec - also the only hang recorder */
++		status = "okay";
+ 		phandle = <0x10b>;
+ 	};
+ 
+@@ -2319,11 +2332,9 @@
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&sdmmc_clk &sdmmc_cmd &sdmmc_det &sdmmc_bus4>;
+ 		rockchip,default-sample-phase = <0x5a>;
++		/* sd-uhs-* removed: the SD card is this box's root, and on the H96 Max UHS
++		 * intermittently failed to re-initialise after a warm reset. Costs SDR104. */
+ 		supports-sd;
+-		sd-uhs-sdr12;
+-		sd-uhs-sdr25;
+-		sd-uhs-sdr50;
+-		sd-uhs-sdr104;
+ 		vqmmc-supply = <&vccio_sd>;
+ 		vmmc-supply = <&vcc_sd>;
+ 		phandle = <0x115>;
+@@ -4290,6 +4301,9 @@
+ 	wifi_en: wifi-en {
+ 		compatible = "regulator-fixed";
+ 		regulator-boot-on;
++		/* no node consumes this supply, so the regulator core switches it off as unused
++		 * ~30 s after boot, taking the Seekwave chip with it */
++		regulator-always-on;
+ 		enable-active-low;
+ 		gpio = <&gpio3 0x0a 0x01>;
+ 		regulator-name = "wifi_en";
+@@ -4362,13 +4376,18 @@
+ 			default-state = "off";
+ 		};
+ 
+-		pwr-green {
++		/* power/standby are the names the shared LED hooks drive, and the hooks own
++		 * both LEDs across suspend and poweroff; the factory called it pwr-green */
++		power {
+ 			gpios = <&gpio4 0x11 0x00>;
+ 			linux,default-trigger = "none";
+ 			default-state = "on";
++			retain-state-suspended;
++			retain-state-shutdown;
+ 		};
+ 
+-		pwr-red {
++		/* the standby half of the same rename; the factory called it pwr-red */
++		standby {
+ 			gpios = <&gpio4 0x0b 0x00>;
+ 			linux,default-trigger = "none";
+ 			default-state = "off";
+@@ -4383,10 +4402,7 @@
+ 		phandle = <0x1ce>;
+ 	};
+ 
+-	chosen: chosen {
+-		bootargs = "earlycon=uart8250,mmio32,0xff9f0000 console=ttyFIQ0 driver_async_probe=dwmmc_rockchip,rockchip-drm drm_kms_helper.fbdev_emulation=0";
+-		phandle = <0x1cf>;
+-	};
++	/* chosen dropped: u-boot supplies bootargs, and the vendor string names ttyFIQ0 */
+ 
+ 	fiq-debugger {
+ 		compatible = "rockchip,fiq-debugger";
+@@ -4397,7 +4413,8 @@
+ 		interrupts = <0x00 0xba 0x04>;
+ 		pinctrl-names = "default";
+ 		pinctrl-0 = <&uart0m0_xfer>;
+-		status = "okay";
++		/* frees ff9f0000 for ttyS0 above */
++		status = "disabled";
+ 	};
+ 
+ 	reserved_memory: reserved-memory {

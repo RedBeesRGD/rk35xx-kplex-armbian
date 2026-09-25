@@ -1,0 +1,16 @@
+NAME          SIZE PARTLABEL
+mmcblk1      14.7G 
+├─mmcblk1p1     4M security
+├─mmcblk1p2     4M uboot
+├─mmcblk1p3     4M trust
+├─mmcblk1p4     4M misc
+├─mmcblk1p5     4M dtbo
+├─mmcblk1p6     1M vbmeta
+├─mmcblk1p7    64M boot
+├─mmcblk1p8    96M recovery
+├─mmcblk1p9   384M backup
+├─mmcblk1p10  384M cache
+├─mmcblk1p11   64M metadata
+├─mmcblk1p12    1M baseparameter
+├─mmcblk1p13    4G super
+└─mmcblk1p14  9.7G userdata

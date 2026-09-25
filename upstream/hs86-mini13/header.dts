@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * HS86 Mini 13 TV box (PCB silkscreen RK35X8-EMCP-347-01-V1.0) — Rockchip RK3528.
+ *
+ * The vendor derived this box from a Hugsun X88PRO DDR4 V10 design and its compatible
+ * still says so, so this includes that board and overrides what differs.
+ *
+ * Checked against the box's own factory device tree, carved from its eMMC: this file
+ * compiles to a tree content-identical to that blob plus the changes below. The
+ * overrides that follow are the box's own hardware, and carry no reasons because the
+ * blob carries none; these are the deliberate departures from it.
+ *
+ *   model              name the box, keeping the vendor string
+ *   reboot-mode        mode-maskrom added, so `reboot maskrom` from the OS reaches the
+ *                      BootROM; the factory SPL reads the register on the way up
+ *   gpu@ff700000       interrupt-names and clocks in the form mainline lima expects,
+ *                      not the vendor Mali blob's
+ *   vop@ff840000       esmart_lb_mode 03 -> 02, giving Esmart0 a 4K line buffer
+ *   tve@ff880000       rockchip,tvemode added, 01 for NTSC 720x480i. Absent, the driver
+ *                      reads an uninitialised value and marks neither CVBS mode preferred
+ *   serial@ff9f0000    enabled with uart0m0_xfer, for the ttyS0 console
+ *   pwm@ffa90030       remote_support_psci 0 -> 1, so the remote wakes the box
+ *   watchdog@ffac0000  enabled, for systemd's RuntimeWatchdogSec
+ *   sdmmc              sd-uhs-* dropped; the card is this box's root, and UHS cards can
+ *                      fail to re-initialise after a warm reset
+ *   wifi-en            regulator-always-on; nothing names it as a supply, so it is
+ *                      otherwise switched off as unused and the Wi-Fi chip with it
+ *   leds               power/standby labels, renamed from the vendor's pwr-green and
+ *                      pwr-red; power gains retain-state-suspended/-shutdown
+ *   chosen             dropped; u-boot supplies bootargs, and the vendor string names
+ *                      ttyFIQ0
+ *   fiq-debugger       disabled; it owns ff9f0000 otherwise
+ */

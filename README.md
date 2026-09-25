@@ -8,25 +8,26 @@ bootloader, device tree, DKMS drivers, boot fixups — is sideloaded into it. No
 
 ## Boxes
 
-|            | **R69**                                     | **H96 Max H313**                               | **H96 Max 3518D**                                    |
-| ---------- | ------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------- |
-| Box        | <img src="docs/r69/image1.jpg" width="300"> | <img src="docs/h96max/image1.jpg" width="300"> | <img src="docs/h96max-3518d/image1.png" width="300"> |
-| Board      | <img src="docs/r69/board.jpg" width="300">  | <img src="docs/h96max/board.jpg" width="300">  | <img src="docs/h96max-3518d/board.jpg" width="300">  |
-| Board key  | `r69`                                       | `h96max`                                       | `h96max-3518d`                                       |
-| Silkscreen | `XR821_V1.1`                                | `3518_ZX_V01 20250818`                         | `3518_DG_ZX_V01 20250401`                            |
-| SoC        | RK3518                                      | RK3518                                         | RK3518                                               |
-| RAM        | 2 GB (1.5 GB usable)                        | 2 GB                                           | 2 GB                                                 |
-| eMMC       | 16 GB Samsung                               | 16 GB Micron                                   | 16 GB Micron, **no SD slot**                         |
-| USB        | USB-A 3.0 (OTG) + USB-A 2.0                 | USB-A 3.0 (OTG) + USB-A 2.0                    | USB-C 2.0 (OTG) + USB-A 2.0                          |
-| Ethernet   | 10/100                                      | 10/100                                         | **none**                                             |
-| Wi-Fi / BT | AIC8800D80                                  | Seekwave SWT6621S                              | Seekwave SWT6621S                                    |
-| Base image | [Armbian ROCK 2F][rock2f]                   | [Armbian ROCK 2F][rock2f]                      | [Armbian ROCK 2F][rock2f]                            |
-| Install    | SD + Maskrom                                | SD + Maskrom                                   | Maskrom only                                         |
-| Details    | [board doc][r69]                            | [board doc][h96]                               | [board doc][h96d]                                    |
+|            | **R69**                                     | **H96 Max H313**                               | **H96 Max 3518D**                                    | **HS86 Mini 13**          |
+| ---------- | ------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------- | ------------------------- |
+| Box        | <img src="docs/r69/image1.jpg" width="300"> | <img src="docs/h96max/image1.jpg" width="300"> | <img src="docs/h96max-3518d/image1.png" width="300"> |                           |
+| Board      | <img src="docs/r69/board.jpg" width="300">  | <img src="docs/h96max/board.jpg" width="300">  | <img src="docs/h96max-3518d/board.jpg" width="300">  |                           |
+| Board key  | `r69`                                       | `h96max`                                       | `h96max-3518d`                                       | `hs86-mini13`             |
+| Silkscreen | `XR821_V1.1`                                | `3518_ZX_V01 20250818`                         | `3518_DG_ZX_V01 20250401`                            | `RK35X8-EMCP-347-01-V1.0` |
+| SoC        | RK3518                                      | RK3518                                         | RK3518                                               | RK3528                    |
+| RAM        | 2 GB (1.5 GB usable)                        | 2 GB                                           | 2 GB                                                 | 2 GB eMCP (1.9 GB usable) |
+| eMMC       | 16 GB Samsung                               | 16 GB Micron                                   | 16 GB Micron, **no SD slot**                         | 16 GB, in the eMCP        |
+| USB        | USB-A 3.0 (OTG) + USB-A 2.0                 | USB-A 3.0 (OTG) + USB-A 2.0                    | USB-C 2.0 (OTG) + USB-A 2.0                          | not recorded              |
+| Ethernet   | 10/100                                      | 10/100                                         | **none**                                             | 10/100                    |
+| Wi-Fi / BT | AIC8800D80                                  | Seekwave SWT6621S                              | Seekwave SWT6621S                                    | Seekwave SWT6621S         |
+| Base image | [Armbian ROCK 2F][rock2f]                   | [Armbian ROCK 2F][rock2f]                      | [Armbian ROCK 2F][rock2f]                            | [Armbian ROCK 2F][rock2f] |
+| Install    | SD + Maskrom                                | SD + Maskrom                                   | Maskrom only                                         | SD                        |
+| Details    | [board doc][r69]                            | [board doc][h96]                               | [board doc][h96d]                                    | [board doc][hs86]         |
 
 [r69]: docs/r69/board.md
 [h96]: docs/h96max/board.md
 [h96d]: docs/h96max-3518d/board.md
+[hs86]: docs/hs86-mini13/board.md
 [rock2f]: https://www.armbian.com/rock-2f/
 
 ## What works
@@ -39,46 +40,46 @@ bootloader, device tree, DKMS drivers, boot fixups — is sideloaded into it. No
 |  ❌  | broken                                                               |
 |  ➖  | not on this board                                                    |
 
-| Hardware                                    | R69 | H96 Max H313 | H96 Max 3518D |
-| ------------------------------------------- | :-: | :----------: | :-----------: |
-| **Storage**                                 |     |              |               |
-| eMMC — boot and rootfs                      | ✅  |      ✅      |      ✅       |
-| microSD — boot and rootfs                   | ✅  |      ✅      |      ➖       |
-| microSD hotplug                             | 🟡  |      🟡      |      ➖       |
-| microSD SDR104 (UHS)                        | ✅  |      ❌      |      ➖       |
-| USB 2.0                                     | ✅  |      ✅      |      ✅       |
-| USB 3.0 — 5 Gbps, `uas`                     | ✅  |      ✅      |      ➖       |
-| **Network**                                 |     |              |               |
-| Ethernet 10/100                             | ✅  |      ✅      |      ➖       |
-| Wi-Fi 2.4 GHz                               | ✅  |      ✅      |      ✅       |
-| Wi-Fi 5 GHz                                 | ✅  |      ✅      |      ✅       |
-| Bluetooth                                   | ✅  |      ✅      |      ✅       |
-| **Display and video**                       |     |              |               |
-| HDMI video                                  | ✅  |      ✅      |      ✅       |
-| HDMI audio                                  | ✅  |      ✅      |      ✅       |
-| HDMI EDID mode list                         | 🟡  |      🟡      |      ✅       |
-| HDMI hotplug re-detect                      | 🟡  |      🟡      |      ✅       |
-| HDMI 4K60                                   | 🟡  |      🟡      |      ✅       |
-| HDMI-CEC                                    | 🟡  |      🟡      |      ✅       |
-| AV jack — composite video                   | ❓  |      ✅      |      ➖       |
-| AV jack — analog audio                      | ❓  |      ✅      |      ➖       |
-| GPU — Mali-450 under lima                   | ✅  |      ✅      |      ✅       |
-| Decode H.264 · HEVC · VP9 · MJPEG, to 8K    | ✅  |      ✅      |      ✅       |
-| Decode MPEG-2 · MPEG-4 · VP8 · H.263, 1080p | ✅  |      ✅      |      ✅       |
-| Encode HEVC · MJPEG · H.264, to 8K          | ✅  |      ✅      |      ✅       |
-| **Input and indicators**                    |     |              |               |
-| Bundled remote over IR                      | ✅  |      ✅      |      ➖       |
-| Bundled remote over Bluetooth, air-mouse    | ✅  |      ✅      |      ✅       |
-| Remote voice mic                            | 🟡  |      🟡      |      🟡       |
-| IR-extender jack                            | 🟡  |      ➖      |      ➖       |
-| Recovery button → Maskrom                   | ✅  |      ✅      |      ✅       |
-| Power button on the remote                  | ✅  |      ✅      |      ✅       |
-| Front LEDs                                  | ✅  |      ✅      |      ✅       |
-| **Power and recovery**                      |     |              |               |
-| Suspend to RAM, wake on the remote          | ✅  |      ✅      |      ❌       |
-| Hardware watchdog                           | ✅  |      ✅      |      ✅       |
-| Serial console                              | ✅  |      ✅      |      ✅       |
-| Maskrom recovery over USB                   | ✅  |      ✅      |      ✅       |
+| Hardware                                    | R69 | H96 Max H313 | H96 Max 3518D | HS86 Mini 13 |
+| ------------------------------------------- | :-: | :----------: | :-----------: | :----------: |
+| **Storage**                                 |     |              |               |              |
+| eMMC — boot and rootfs                      | ✅  |      ✅      |      ✅       |      ❓      |
+| microSD — boot and rootfs                   | ✅  |      ✅      |      ➖       |      🟡      |
+| microSD hotplug                             | 🟡  |      🟡      |      ➖       |      ❓      |
+| microSD SDR104 (UHS)                        | ✅  |      ❌      |      ➖       |      ❓      |
+| USB 2.0                                     | ✅  |      ✅      |      ✅       |      🟡      |
+| USB 3.0 — 5 Gbps, `uas`                     | ✅  |      ✅      |      ➖       |      ❓      |
+| **Network**                                 |     |              |               |              |
+| Ethernet 10/100                             | ✅  |      ✅      |      ➖       |      🟡      |
+| Wi-Fi 2.4 GHz                               | ✅  |      ✅      |      ✅       |      🟡      |
+| Wi-Fi 5 GHz                                 | ✅  |      ✅      |      ✅       |      🟡      |
+| Bluetooth                                   | ✅  |      ✅      |      ✅       |      🟡      |
+| **Display and video**                       |     |              |               |              |
+| HDMI video                                  | ✅  |      ✅      |      ✅       |      🟡      |
+| HDMI audio                                  | ✅  |      ✅      |      ✅       |      🟡      |
+| HDMI EDID mode list                         | 🟡  |      🟡      |      ✅       |      ❓      |
+| HDMI hotplug re-detect                      | 🟡  |      🟡      |      ✅       |      ❓      |
+| HDMI 4K60                                   | 🟡  |      🟡      |      ✅       |      ❓      |
+| HDMI-CEC                                    | 🟡  |      🟡      |      ✅       |      ❓      |
+| AV jack — composite video                   | ❓  |      ✅      |      ➖       |      🟡      |
+| AV jack — analog audio                      | ❓  |      ✅      |      ➖       |      🟡      |
+| GPU — Mali-450 under lima                   | ✅  |      ✅      |      ✅       |      🟡      |
+| Decode H.264 · HEVC · VP9 · MJPEG, to 8K    | ✅  |      ✅      |      ✅       |      ❓      |
+| Decode MPEG-2 · MPEG-4 · VP8 · H.263, 1080p | ✅  |      ✅      |      ✅       |      ❓      |
+| Encode HEVC · MJPEG · H.264, to 8K          | ✅  |      ✅      |      ✅       |      ❓      |
+| **Input and indicators**                    |     |              |               |              |
+| Bundled remote over IR                      | ✅  |      ✅      |      ➖       |      🟡      |
+| Bundled remote over Bluetooth, air-mouse    | ✅  |      ✅      |      ✅       |      ❓      |
+| Remote voice mic                            | 🟡  |      🟡      |      🟡       |      ❓      |
+| IR-extender jack                            | 🟡  |      ➖      |      ➖       |      ❓      |
+| Recovery button → Maskrom                   | ✅  |      ✅      |      ✅       |      ❓      |
+| Power button on the remote                  | ✅  |      ✅      |      ✅       |      ❓      |
+| Front LEDs                                  | ✅  |      ✅      |      ✅       |      🟡      |
+| **Power and recovery**                      |     |              |               |              |
+| Suspend to RAM, wake on the remote          | ✅  |      ✅      |      ❌       |      ❓      |
+| Hardware watchdog                           | ✅  |      ✅      |      ✅       |      🟡      |
+| Serial console                              | ✅  |      ✅      |      ✅       |      ❓      |
+| Maskrom recovery over USB                   | ✅  |      ✅      |      ✅       |      ❓      |
 
 > **Composite needs a kernel Armbian does not ship.** `ROCKCHIP_DRM_TVE` is off in
 > `linux-rk35xx-vendor` and the encoder links into `rockchipdrm` rather than a module, so no `apt`
@@ -147,11 +148,9 @@ Restore only if you want the factory MAC back. `docs/armbian-install.md` has the
 Nothing to boot from, so backup and install both go over USB in Maskrom. Hold the recovery button,
 then plug the OTG cable in — the cable powers the box, so the PSU stays out.
 
-**One cable, ordered before you need it:** a [USB-A male-to-male][amm]
-(~$4), with a
-[USB-C→USB-A female adapter][ca] (~$8 for 4) on whichever end is USB-C. Charge-only
-cables enumerate nothing, and a plain USB-C→USB-A cable with the C end in the host does not do OTG
-at all.
+**One cable, ordered before you need it:** a [USB-A male-to-male][amm] (~$4), with a [USB-C→USB-A
+female adapter][ca] (~$8 for 4) on whichever end is USB-C. Charge-only cables enumerate nothing, and
+a plain USB-C→USB-A cable with the C end in the host does not do OTG at all.
 
 [amm]: https://www.amazon.com/dp/B0CLB4Y5XD
 [ca]: https://www.amazon.com/dp/B0DSK82JK8
