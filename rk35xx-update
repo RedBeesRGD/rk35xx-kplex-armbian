@@ -139,14 +139,22 @@ migrate() {
 migrate
 
 echo "[1/6] installing firmware payload ($BOARD)"
-while read -r mode src dest; do
-  case "$mode" in ''|\#*) continue ;; esac
-  # one payload entry is this script: truncating the inode the shell is reading resumes it mid-token.
-  # The staging name is hidden and .new-suffixed, which systemd and run-parts both skip.
-  stage="$(dirname "$dest")/.$(basename "$dest").rk35xx-new"
-  install -D -m "$mode" "$FW/$src" "$stage"
-  mv -f "$stage" "$dest"
-done < "$FW/$BOARD_PAYLOAD"
+# common list first, so a board's own list can override a common file (as build-image.sh does)
+for list in "$FW/common/payload.list" "$FW/$BOARD_PAYLOAD"; do
+	[ -f "$list" ] || continue
+	while read -r mode src dest; do
+		case "$mode" in ''|\#*) continue ;; esac
+		# one payload entry is this script: truncating the inode the shell is reading resumes it mid-token.
+		# The staging name is hidden and .new-suffixed, which systemd and run-parts both skip.
+		stage="$(dirname "$dest")/.$(basename "$dest").rk35xx-new"
+		install -D -m "$mode" "$FW/$src" "$stage"
+		mv -f "$stage" "$dest"
+	done < "$list"
+done
+# loader cache for new /usr/local libraries, and a refreshed /kino/doppler
+if [ -x /usr/local/sbin/kino-setup ]; then
+	/usr/local/sbin/kino-setup || echo "  (kino-setup failed; continuing)"
+fi
 "/usr/local/sbin/$P-boardname"   # re-assert the login-banner name (apt upgrades reset it)
 
 # BOARD_WANTS gains units over time and the image-build drop-in is a snapshot of the list as it was

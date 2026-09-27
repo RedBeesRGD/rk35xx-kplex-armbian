@@ -58,6 +58,7 @@ SERIALCON="${BOARD_SERIALCON:-earlycon=uart8250,mmio32,0xff9f0000 console=ttyS0,
 # IR wake, so our patched module owns the receiver instead
 IR_BLACKLIST="${BOARD_IR_BLACKLIST-initcall_blacklist=rk_pwm_driver_init}"
 BOARD_CMA="${BOARD_CMA:-256M}"   # the tree reserves 8 MiB, too little for one 4K frame
+IMAGE_HOSTNAME="${IMAGE_HOSTNAME:-kplex}" # one hostname for every box; BOARD_HOSTNAME still names the drop-in
 BOARD_NAME_FILE="$FW/$BOARD/board-name"   # same file the apt hook restores from
 
 # ---- helpers ------------------------------------------------------------------------
@@ -81,7 +82,9 @@ e2cp() { command e2cp -O 0 -G 0 "$@"; }
 e2mkdir() { command e2mkdir -O 0 -G 0 "$@"; }
 
 # ---- preflight: everything checked before the first byte is written -------------------
-PAYLOAD_SRCS="$(sed -E 's/^[[:space:]]*#.*//; /^[[:space:]]*$/d' "$PAYLOAD" | awk '{print $2}')"
+PAYLOADS=("$PAYLOAD")
+[ -f "$FW/common/payload.list" ] && PAYLOADS=("$FW/common/payload.list" "$PAYLOAD")
+PAYLOAD_SRCS="$(sed -E 's/^[[:space:]]*#.*//; /^[[:space:]]*$/d' "${PAYLOADS[@]}" | awk '{print $2}')"
 for f in "$BASE" "$IDBLOADER" "$UBOOT" "$DTB" "$PAYLOAD" "$BOARD_NAME_FILE" "$FW/common/fetch-dkms-src.sh"; do
   [ -f "$f" ] || { echo "Missing: $f"; exit 1; }
 done
@@ -150,7 +153,7 @@ OS="$(uname -s)"
 ATTACHED=""
 detach() { [ -n "$ATTACHED" ] || return 0
   case "$OS" in Darwin) hdiutil detach "$ATTACHED" >/dev/null 2>&1 || true ;;
-                Linux)  sudo losetup -d "$ATTACHED" 2>/dev/null || true ;; esac; }
+                Linux)  doas losetup -d "$ATTACHED" 2>/dev/null || true ;; esac; }
 trap detach EXIT
 
 if [ "$OS" = Darwin ]; then
@@ -160,10 +163,10 @@ if [ "$OS" = Darwin ]; then
   # node rejects. hdiutil hands the node to the attaching user (rw), so no sudo needed.
   FS="/dev/${PART}"
 else
-  ATTACHED="$(sudo losetup -fP --show "$OUT")"
+  ATTACHED="$(doas losetup -fP --show "$OUT")"
   FS="$(lsblk -lnpo NAME "$ATTACHED" | tail -1)"
   # own the node so e2tools run unprivileged (root + user-owned /tmp scratch breaks e2cp copy-out)
-  sudo chown "$(id -un)" "$FS"
+  doas chown "$(id -un)" "$FS"
 fi
 echo "      rootfs partition: $FS"
 
@@ -200,11 +203,13 @@ echo "[5/5] Installing $BOARD payload + DKMS sources + rebrand"
 TMP="$(mktemp -d)"
 
 # --- static payload: every file from the board's payload.list, verbatim ---
-while read -r mode src dest; do
-  case "$mode" in ''|\#*) continue ;; esac
-  e2mkdir "$FS:$(dirname "$dest")" 2>/dev/null || true
-  e2cp -P "$mode" "$FW/$src" "$FS:$dest"
-done < "$PAYLOAD"
+for list in "${PAYLOADS[@]}"; do
+	while read -r mode src dest; do
+		case "$mode" in ''|\#*) continue ;; esac
+		e2mkdir "$FS:$(dirname "$dest")" 2>/dev/null || true
+		e2cp -P "$mode" "$FW/$src" "$FS:$dest"
+	done < "$list"
+done
 
 # --- enable the board's oneshots without a wants/ symlink (e2tools can't symlink) ---
 printf '[Unit]\nWants=%s\n' "$BOARD_WANTS" > "$TMP/10-$BOARD_HOSTNAME.conf"
@@ -242,11 +247,11 @@ rm -f "$BTMAIN" "$BTMAIN.new"
 # ---- rebrand: the ROCK 2F base ships hostname "rock-2f" ------------------------------
 e2cp "$FS:/etc/hostname" "$TMP/oldhost" 2>/dev/null || true
 OLDH="$(tr -d '[:space:]' < "$TMP/oldhost" 2>/dev/null)"
-printf '%s\n' "$BOARD_HOSTNAME" > "$TMP/hostname"
+printf '%s\n' "$IMAGE_HOSTNAME" > "$TMP/hostname"
 e2cp "$TMP/hostname" "$FS:/etc/hostname"
 if [ -n "$OLDH" ] && e2cp "$FS:/etc/hosts" "$TMP/hosts" 2>/dev/null; then
-  sed "s/$OLDH/$BOARD_HOSTNAME/g" "$TMP/hosts" > "$TMP/hosts.new"
-  e2cp "$TMP/hosts.new" "$FS:/etc/hosts"
+	sed "s/$OLDH/$IMAGE_HOSTNAME/g" "$TMP/hosts" > "$TMP/hosts.new"
+	e2cp "$TMP/hosts.new" "$FS:/etc/hosts"
 fi
 # relabel the login MOTD board name (display only; BOARD= identifier stays for armbian tooling)
 if e2cp "$FS:/etc/armbian-release" "$TMP/arel" 2>/dev/null; then
