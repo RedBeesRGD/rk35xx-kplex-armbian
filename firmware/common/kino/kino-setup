@@ -1,5 +1,5 @@
 #!/bin/bash
-# kino-setup — loader cache, /kino tree, ~/kino.sh. Idempotent.
+# kino-setup — loader cache, sshd marker, /kino tree, ~/kino.sh, PipeWire at boot. Idempotent.
 # Run at first login (from /root/provisioning.sh) and by rk35xx-update.
 #   usage: kino-setup [USER]
 [[ $EUID -eq 0 ]] || { echo "kino-setup: run as root" >&2; exit 1; }
@@ -7,6 +7,12 @@
 # /usr/local/lib/aarch64-linux-gnu is reachable only through the loader cache;
 # this also creates the soname symlinks the image cannot carry
 ldconfig
+
+# a box whose first login is already done (updated in place) must keep sshd; before anything can fail
+if [[ ! -e /root/.not_logged_in_yet ]]; then
+	install -d /var/lib/kplex
+	touch /var/lib/kplex/setup-done
+fi
 
 # the user: the argument, else the owner of an existing /kino, else UID 1000
 user=${1:-}
@@ -25,5 +31,11 @@ chown -R "$user:" /kino
 
 # first install only, so the user's own edits survive updates
 [[ -e $home/kino.sh ]] || install -m 755 -o "$user" -g "$(id -gn "$user")" /etc/skel/kino.sh "$home/kino.sh"
+
+# PipeWire for this user from boot: lingering starts the user's systemd at boot, without a login
+if [[ -e /usr/lib/systemd/user/pipewire.service ]]; then
+	systemctl --global enable pipewire.service pipewire-pulse.service wireplumber.service >/dev/null 2>&1
+	loginctl enable-linger "$user"
+fi
 
 echo "kino-setup: /kino set up for $user"
