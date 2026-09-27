@@ -1,0 +1,29 @@
+#!/bin/bash
+# kino-setup — loader cache, /kino tree, ~/kino.sh. Idempotent.
+# Run at first login (from /root/provisioning.sh) and by rk35xx-update.
+#   usage: kino-setup [USER]
+[[ $EUID -eq 0 ]] || { echo "kino-setup: run as root" >&2; exit 1; }
+
+# /usr/local/lib/aarch64-linux-gnu is reachable only through the loader cache;
+# this also creates the soname symlinks the image cannot carry
+ldconfig
+
+# the user: the argument, else the owner of an existing /kino, else UID 1000
+user=${1:-}
+[[ -n $user ]] || user=$(stat -c %U /kino 2>/dev/null)
+[[ -n $user && $user != root ]] || user=$(id -nu 1000 2>/dev/null)
+if [[ -z $user ]] || ! id "$user" >/dev/null 2>&1; then
+	echo "kino-setup: no user account yet; run 'kino-setup USER' once one exists" >&2
+	exit 1
+fi
+home=$(getent passwd "$user" | cut -d: -f6)
+
+install -d -m 755 /kino /kino/doppler /kino/apps
+# overwrites the shipped files; anything else in /kino/doppler is left alone
+tar -xzf /usr/share/kino/doppler.tar.gz -C /kino/doppler --no-same-owner || exit 1
+chown -R "$user:" /kino
+
+# first install only, so the user's own edits survive updates
+[[ -e $home/kino.sh ]] || install -m 755 -o "$user" -g "$(id -gn "$user")" /etc/skel/kino.sh "$home/kino.sh"
+
+echo "kino-setup: /kino set up for $user"
