@@ -1,1 +1,18 @@
+# Applied to every board, before the board payload.list. Fields: mode, source under firmware/, destination.
 755	common/kino/kino-setup	/usr/local/sbin/kino-setup
+755	common/kino/doppler	/usr/bin/doppler
+755	common/kino/kage	/usr/bin/kage
+644	common/kino/doppler.tar.gz	/usr/share/kino/doppler.tar.gz
+755	common/kino/kino.sh	/etc/skel/kino.sh
+700	common/kino/provisioning.sh	/root/provisioning.sh
+644	common/kino/lib/libdrm.so.2.134.0	/usr/local/lib/aarch64-linux-gnu/libdrm.so.2.134.0
+644	common/kino/lib/libdrm_amdgpu.so.1.134.0	/usr/local/lib/aarch64-linux-gnu/libdrm_amdgpu.so.1.134.0
+644	common/kino/lib/libdrm_radeon.so.1.134.0	/usr/local/lib/aarch64-linux-gnu/libdrm_radeon.so.1.134.0
+644	common/kino/lib/libdrm_etnaviv.so.1.134.0	/usr/local/lib/aarch64-linux-gnu/libdrm_etnaviv.so.1.134.0
+644	common/kino/lib/libpixman-1.so.0.46.0	/usr/local/lib/aarch64-linux-gnu/libpixman-1.so.0.46.0
+644	common/kino/lib/libwayland-client.so.0.26.90	/usr/local/lib/aarch64-linux-gnu/libwayland-client.so.0.26.90
+644	common/kino/lib/libwayland-cursor.so.0.26.90	/usr/local/lib/aarch64-linux-gnu/libwayland-cursor.so.0.26.90
+644	common/kino/lib/libwayland-egl.so.1.26.90	/usr/local/lib/aarch64-linux-gnu/libwayland-egl.so.1.26.90
+644	common/kino/lib/libwayland-server.so.0.26.90	/usr/local/lib/aarch64-linux-gnu/libwayland-server.so.0.26.90
+644	common/kino/lib/libwlroots-0.20.so	/usr/local/lib/aarch64-linux-gnu/libwlroots-0.20.so
+644	common/kino/lib/libxkbcommon.so.0.14.0	/usr/local/lib/aarch64-linux-gnu/libxkbcommon.so.0.14.0
