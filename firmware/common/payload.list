@@ -16,6 +16,6 @@
 644	common/kino/lib/libwayland-server.so.0.26.90	/usr/local/lib/aarch64-linux-gnu/libwayland-server.so.0.26.90
 644	common/kino/lib/libwlroots-0.20.so	/usr/local/lib/aarch64-linux-gnu/libwlroots-0.20.so
 644	common/kino/lib/libxkbcommon.so.0.14.0	/usr/local/lib/aarch64-linux-gnu/libxkbcommon.so.0.14.0
-644	common/kplex/ssh-after-setup.conf	/etc/systemd/system/ssh.service.d/10-kplex-after-setup.conf
-644	common/kplex/ssh-after-setup.conf	/etc/systemd/system/ssh.socket.d/10-kplex-after-setup.conf
-644	common/kplex/firstboot-notice.sh	/etc/profile.d/00-kplex-firstboot.sh
+644	common/kino/ssh-after-setup.conf	/etc/systemd/system/ssh.service.d/10-kplex-after-setup.conf
+644	common/kino/ssh-after-setup.conf	/etc/systemd/system/ssh.socket.d/10-kplex-after-setup.conf
+644	common/kino/firstboot-notice.sh	/etc/profile.d/00-kplex-firstboot.sh
