@@ -33,6 +33,21 @@ home=$(getent passwd "$user" | cut -d: -f6)
 install -d -m 755 /kino /kino/doppler /kino/apps
 # overwrites the shipped files; anything else in /kino/doppler is left alone
 tar -xzf /usr/share/kino/doppler.tar.gz -C /kino/doppler --no-same-owner || exit 1
+# default apps: each is installed once, so a user's own edits and removals stick
+if [[ -f /usr/share/kino/apps.tar.gz ]]; then
+	seeded=/var/lib/kplex/apps-seeded
+	install -d "${seeded%/*}"
+	tmp=$(mktemp -d)
+	tar -xzf /usr/share/kino/apps.tar.gz -C "$tmp" --no-same-owner
+	for app in "$tmp"/*; do
+		[[ -e $app ]] || continue
+		name=${app##*/}
+		grep -qxF "$name" "$seeded" 2>/dev/null && continue
+		[[ -e /kino/apps/$name ]] || cp -a "$app" /kino/apps/
+		echo "$name" >> "$seeded"
+	done
+	rm -rf "$tmp"
+fi
 chown -R "$user:" /kino
 
 # first install only, so the user's own edits survive updates
