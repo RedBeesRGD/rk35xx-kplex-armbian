@@ -652,7 +652,8 @@
 			compatible = "snps,dwc3";
 			reg = <0x00 0xfe500000 0x00 0x400000>;
 			interrupts = <0x00 0x98 0x04>;
-			dr_mode = "otg";
+			/* USB-A socket with no ID line: otg leaves the port a device */
+			dr_mode = "host";
 			phys = <&u2phy_otg &combphy_pu 0x04>;
 			phy-names = "usb2-phy", "usb3-phy";
 			phy_type = "utmi_wide";

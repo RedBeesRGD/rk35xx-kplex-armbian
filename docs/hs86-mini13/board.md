@@ -32,7 +32,7 @@ silkscreen, an eMCP (DRAM and eMMC in one package), and the RK3528 proper rather
 | Wi-Fi / BT, factory power path | ❌    | enable held low; no SDIO card — see `dtb.md`               |
 | Wi-Fi, pwrseq power path       | ✅    | `wlan0` up and connected, reported 2026-09-25              |
 | Bluetooth                      | ❓    |                                                            |
-| Other USB port                 | ❓    | VBUS is gpio4 B4 here, B5 on the H96 Max                   |
+| Second USB port (`dwc3`)       | ✅    | keyboard enumerates on `xhci` once `dwc3` is host          |
 | RTC                            | ❓    |                                                            |
 | IR remote keymap               | 🟡    | factory `ir_key*` tables carried unchanged                 |
 | LEDs                           | 🟡    | inverted on the H96 Max DTB, which drives them active-low  |

@@ -67,3 +67,14 @@ from the box. Bluetooth not looked at.
   `SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR=0` fixed it; X11 through Xwayland worked throughout.
 - **DKMS:** `build-image.sh` now builds the staged modules in the image chroot under qemu
   (`rk35xx-dkms-build`); `rk35xx-firstboot` only builds what is still missing. ❓ not yet run.
+
+## 2026-09-28 — second USB port dead: `dwc3` left in `otg`
+
+The factory tree has `dwc3@fe500000` `dr_mode = "otg"` with `extcon = <&usb2phy>`; the other boards'
+factory trees have `host`. The socket is USB-A with no ID line, so the port came up a device:
+`otg_mode` read `otg`, dwc3's debugfs `mode` read `device`, and `lsusb -t` showed only the
+`ehci`/`ohci` pair. `echo host > /sys/devices/platform/ffdf0000.usb2-phy/otg_mode` brought up two
+`xhci-hcd` buses, and a keyboard moved to that port enumerated as `usb 3-1`. Android presumably
+switches it the same way from its USB mode setting.
+
+`board.patch` now sets `dr_mode = "host"`. ❓ not yet booted.

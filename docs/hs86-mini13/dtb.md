@@ -29,6 +29,7 @@ Base: the box's factory Android DTB, carved from the eMMC `boot` partition
 | Node                | Change                                                  | Why                                                           |
 | ------------------- | ------------------------------------------------------- | ------------------------------------------------------------- |
 | `/` (root)          | `model` → `HS86 Mini 13 RK35X8-EMCP-347-01-V1.0`        | the factory string names the X88PRO reference design          |
+| `dwc3@fe500000`     | `dr_mode` `otg` → `host`                                | USB-A socket, no ID line: `otg` left the port a device        |
 | `reboot-mode`       | `mode-maskrom` added                                    | 🟡 `reboot maskrom` from the OS; factory SPL reads it         |
 | `gpu@ff700000`      | `interrupt-names`/`clocks`/`clock-names` → lima style   | Armbian uses mainline `lima`                                  |
 | `vop@ff840000`      | `esmart_lb_mode` `[03]` → `[02]`                        | 🟡 4K line buffer for Esmart0                                 |

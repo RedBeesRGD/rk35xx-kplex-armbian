@@ -9,7 +9,17 @@
  
  	aliases {
  		ethernet0 = "/ethernet@ffbd0000";
-@@ -924,6 +924,9 @@
+@@ -652,7 +652,8 @@
+ 			compatible = "snps,dwc3";
+ 			reg = <0x00 0xfe500000 0x00 0x400000>;
+ 			interrupts = <0x00 0x98 0x04>;
+-			dr_mode = "otg";
++			/* USB-A socket with no ID line: otg leaves the port a device */
++			dr_mode = "host";
+ 			phys = <&u2phy_otg &combphy_pu 0x04>;
+ 			phy-names = "usb2-phy", "usb3-phy";
+ 			phy_type = "utmi_wide";
+@@ -924,6 +925,9 @@
  			mode-charge = <0x5242c30b>;
  			mode-fastboot = <0x5242c309>;
  			mode-loader = <0x5242c301>;
@@ -19,7 +29,7 @@
  			mode-normal = <0x5242c300>;
  			mode-recovery = <0x5242c303>;
  			mode-ums = <0x5242c30c>;
-@@ -1002,9 +1005,10 @@
+@@ -1002,9 +1006,10 @@
  		compatible = "arm,mali-450";
  		reg = <0x00 0xff700000 0x00 0x40000>;
  		interrupts = <0x00 0x58 0x04 0x00 0x59 0x04 0x00 0x56 0x04 0x00 0x5c 0x04 0x00 0x5d 0x04 0x00 0x5a 0x04 0x00 0x5b 0x04>;
@@ -33,7 +43,7 @@
  		assigned-clocks = <&scmi_clk 0x16>;
  		assigned-clock-rates = <0x11e1a300>;
  		power-domains = <&power 0x04>;
-@@ -1276,7 +1280,8 @@
+@@ -1276,7 +1281,8 @@
  		iommus = <&vop_mmu>;
  		rockchip,grf = <&grf>;
  		status = "okay";
@@ -43,7 +53,7 @@
  		support-multi-area;
  		phandle = <0xea>;
  
-@@ -1456,6 +1461,9 @@
+@@ -1456,6 +1462,9 @@
  		rockchip,lumafilter6 = <0xf830df7>;
  		rockchip,lumafilter7 = <0x8de055f>;
  		rockchip,tve-upsample = <0x02>;
@@ -53,7 +63,7 @@
  		rockchip,grf = <&grf>;
  		nvmem-cells = <&vdac_out_current &test_version>;
  		nvmem-cell-names = "out-current", "version";
-@@ -1580,7 +1588,10 @@
+@@ -1580,7 +1589,10 @@
  		reg-shift = <0x02>;
  		reg-io-width = <0x04>;
  		dmas = <&dmac 0x09 &dmac 0x08>;
@@ -65,7 +75,7 @@
  		phandle = <0xf3>;
  	};
  
-@@ -1852,7 +1863,8 @@
+@@ -1852,7 +1864,8 @@
  		status = "okay";
  		remote_pwm_id = <0x03>;
  		handle_cpu_id = <0x01>;
@@ -75,7 +85,7 @@
  		phandle = <0x105>;
  
  		ir_key4 {
-@@ -1973,7 +1985,8 @@
+@@ -1973,7 +1986,8 @@
  		clocks = <&cru 0x73 &cru 0x72>;
  		clock-names = "tclk", "pclk";
  		interrupts = <0x00 0x1c 0x04>;
@@ -85,7 +95,7 @@
  		phandle = <0x10b>;
  	};
  
-@@ -2319,11 +2332,9 @@
+@@ -2319,11 +2333,9 @@
  		pinctrl-names = "default";
  		pinctrl-0 = <&sdmmc_clk &sdmmc_cmd &sdmmc_det &sdmmc_bus4>;
  		rockchip,default-sample-phase = <0x5a>;
@@ -99,7 +109,7 @@
  		vqmmc-supply = <&vccio_sd>;
  		vmmc-supply = <&vcc_sd>;
  		phandle = <0x115>;
-@@ -4296,6 +4307,9 @@
+@@ -4296,6 +4308,9 @@
  		regulator-min-microvolt = <0x325aa0>;
  		regulator-max-microvolt = <0x325aa0>;
  		vin-supply = <&vcc_3v3_s3>;
@@ -109,7 +119,7 @@
  		phandle = <0x1c8>;
  	};
  
-@@ -4303,6 +4317,10 @@
+@@ -4303,6 +4318,10 @@
  		compatible = "mmc-pwrseq-simple";
  		pinctrl-names = "default";
  		pinctrl-0 = <&wifi_enable_h>;
@@ -120,7 +130,7 @@
  		phandle = <0x7d>;
  	};
  
-@@ -4326,7 +4344,8 @@
+@@ -4326,7 +4345,8 @@
  		pinctrl-0 = <&wifi_host_wake_irq>;
  		WIFI,host_wake_irq = <0xa5 0x0b 0x00>;
  		WIFI,poweren_gpio = <&gpio3 0x0a 0x00>;
@@ -130,7 +140,7 @@
  		phandle = <0x1ca>;
  	};
  
-@@ -4362,13 +4381,18 @@
+@@ -4362,13 +4382,18 @@
  			default-state = "off";
  		};
  
@@ -151,7 +161,7 @@
  			gpios = <&gpio4 0x0b 0x00>;
  			linux,default-trigger = "none";
  			default-state = "off";
-@@ -4383,10 +4407,7 @@
+@@ -4383,10 +4408,7 @@
  		phandle = <0x1ce>;
  	};
  
@@ -163,7 +173,7 @@
  
  	fiq-debugger {
  		compatible = "rockchip,fiq-debugger";
-@@ -4397,7 +4418,8 @@
+@@ -4397,7 +4419,8 @@
  		interrupts = <0x00 0xba 0x04>;
  		pinctrl-names = "default";
  		pinctrl-0 = <&uart0m0_xfer>;
