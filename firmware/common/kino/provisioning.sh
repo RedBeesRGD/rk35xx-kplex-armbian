@@ -7,6 +7,7 @@ install -d /var/lib/kplex
 touch /var/lib/kplex/setup-done
 systemctl start ssh.service || true
 
-# hand the HDMI console to the new user once Armbian's cleanup has run; this ends the root session there
+# Hand the HDMI console to the new user once Armbian's cleanup has run. Restarting the getty would
+# not end the root login session; ending seat0's sessions does, and the getty restarts with autologin.
 echo "Logging in as ${RealUserName:-the new user} on the console..."
-systemd-run --quiet --on-active=3 systemctl restart getty@tty1.service || true
+systemd-run --quiet --on-active=3 loginctl terminate-seat seat0 || true
