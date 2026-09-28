@@ -1,9 +1,10 @@
 # HS86 Mini 13 firmware payload — files copied verbatim into the rootfs (mode src dest, src under firmware/).
 # Mechanism scripts are family-level (rk35xx-*, firmware/common/); this list is mostly board data.
-# DKMS *sources* are fetched by board.conf's board_stage_dkms, built by rk35xx-firstboot.
+# DKMS *sources* are fetched by board.conf's board_stage_dkms, built by rk35xx-dkms-build.
 
 # family first boot (enabled via a multi-user.target drop-in at image build)
 0755 common/rk35xx-firstboot                         /usr/local/sbin/rk35xx-firstboot
+0755 common/rk35xx-dkms-build                        /usr/local/sbin/rk35xx-dkms-build
 0644 common/rk35xx-firstboot.service                 /etc/systemd/system/rk35xx-firstboot.service
 
 # Seekwave Wi-Fi/BT: module autoload + firmware, all shared (see common/seekwave-fw/README.md)
@@ -15,7 +16,7 @@
 0644 common/seekwave-fw/sv6160lite.nvbin                    /lib/firmware/sv6160lite.nvbin
 0644 common/skwbt-options.conf                              /etc/modprobe.d/zz-rk35xx-skwbt.conf
 
-# DKMS build files (sources fetched at image build; rk35xx-firstboot builds whatever is staged)
+# DKMS build files (sources fetched and modules built at image build)
 0644 common/rockchip-pwm-remotectl-rk35xx/Makefile   /usr/src/rockchip-pwm-remotectl-rk35xx-1.0/Makefile
 0644 common/rockchip-pwm-remotectl-rk35xx/dkms.conf  /usr/src/rockchip-pwm-remotectl-rk35xx-1.0/dkms.conf
 

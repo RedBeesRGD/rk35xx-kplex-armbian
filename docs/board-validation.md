@@ -224,7 +224,8 @@ insert and remove · AV jack · power meter at idle / suspended / off, bare boar
 
 - `ssh` is not a throughput test — its encryption is itself CPU load. Use `iperf3` or `nc`.
 - Measure the **second** boot; the first legitimately spends a minute on resize and first-run setup.
-- First boot compiles DKMS offline — allow ~4 minutes before calling it a failure.
+- An image built without its DKMS modules compiles them on first boot, offline — allow ~4 minutes
+  before calling it a failure.
 - Level-filtering `dmesg` hides most of it: on the R69, 914 lines against 121 for `-l err,warn`.
   Judge a line by whether it tells the reader something, not by the level it was logged at —
   demoting a chatty `dev_err` to `dev_dbg` hides it rather than fixing it.

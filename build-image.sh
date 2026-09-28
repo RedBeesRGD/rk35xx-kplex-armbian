@@ -110,6 +110,15 @@ done
 for t in curl patch tar; do
   command -v "$t" >/dev/null || { echo "Need $t (DKMS source fetch)"; exit 1; }
 done
+# DKMS modules are built in the image's own arm64 userspace, through the qemu-aarch64 handler the
+# kplex base build already needs; without Linux or with DKMS_PREBUILD=no, first boot builds them
+DKMS_PREBUILD="${DKMS_PREBUILD:-yes}"
+[ "$(uname -s)" = Linux ] || DKMS_PREBUILD=no
+if [ "$DKMS_PREBUILD" = yes ]; then
+	grep -qx enabled /proc/sys/fs/binfmt_misc/qemu-aarch64 2>/dev/null &&
+		grep -q '^flags: .*F' /proc/sys/fs/binfmt_misc/qemu-aarch64 ||
+		{ echo "Need the qemu-aarch64 binfmt handler with the F flag to prebuild DKMS modules, or DKMS_PREBUILD=no"; exit 1; }
+fi
 
 # ---- 1. base image -> OUT ------------------------------------------------------------
 echo "[1/5] Writing base image -> $OUT"
@@ -259,6 +268,29 @@ if e2cp "$FS:/etc/armbian-release" "$TMP/arel" 2>/dev/null; then
   e2cp "$TMP/arel.new" "$FS:/etc/armbian-release"
 fi
 rm -rf "$TMP"
+
+# ---- DKMS modules, built now so first boot compiles nothing -------------------------
+# One root shell for mount, chroot and cleanup, so doas asks once. The script is an argument, not
+# stdin: anything in the build that reads stdin would otherwise eat the rest of it.
+DKMS_ROOT='set -e
+mnt=$(mktemp -d)
+trap "for m in dev sys proc \"\"; do umount \"\$mnt/\$m\" 2>/dev/null || true; done; rmdir \"\$mnt\" 2>/dev/null || true" EXIT
+mount "$1" "$mnt"
+mount -t proc proc "$mnt/proc"
+mount -t sysfs sysfs "$mnt/sys"
+mount --bind /dev "$mnt/dev"
+kver=$(ls "$mnt/lib/modules" | head -1)
+[ -f "$mnt/usr/src/linux-headers-$kver/Makefile" ] || { echo "The base image has no kernel headers for $kver"; exit 1; }
+chroot "$mnt" /usr/local/sbin/rk35xx-dkms-build "$kver"
+if chroot "$mnt" dkms status -k "$kver" | grep -v ": installed"; then
+	echo "      WARNING: the modules above are not installed; the box retries them on first boot"
+fi'
+if [ "$DKMS_PREBUILD" = yes ]; then
+	echo "      building DKMS modules in the image (arm64 under qemu, several minutes)"
+	doas sh -c "$DKMS_ROOT" sh "$FS"
+else
+	echo "      DKMS modules left for first boot (not a Linux host, or DKMS_PREBUILD=no)"
+fi
 
 # --- verify we didn't corrupt the rootfs (e2tools writes ext4 without a kernel) --------
 # (homebrew keeps e2fsprogs keg-only, so look in its opt prefix too)

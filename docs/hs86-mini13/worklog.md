@@ -53,3 +53,17 @@ routes it.
 
 `rk35xx-update` with the `sdio-pwrseq` grafts: the card enumerates and `wlan0` connects, reported
 from the box. Bluetooth not looked at.
+
+## 2026-09-28 — kino on the kplex base: black screen, SDL hang, DKMS moved to image build
+
+- **Black screen:** every page flip rejected as `tearing page flip to an unsupported backend`. The
+  shipped `libwlroots-0.20.so` was stock 0.20.2 (no `SCALING_FILTER` string); kage is built against
+  the `kplex-0.20` fork, whose `buffer_scale_filter` sits before `tearing_page_flip` in
+  `struct wlr_output_state`, so kage's nearest filter (1) read as the tearing flag. Shipping the
+  fork's build (`f0b7901`) fixed it. Both keep the soname `libwlroots-0.20.so`, so installing stock
+  cage over it brings the fault back.
+- **SDL2 on native Wayland:** hung in `SDL_CreateWindow`, blocked in `wl_display_dispatch_queue`;
+  libdecor had no plugin (`No plugins found, falling back on no decorations`).
+  `SDL_VIDEO_WAYLAND_ALLOW_LIBDECOR=0` fixed it; X11 through Xwayland worked throughout.
+- **DKMS:** `build-image.sh` now builds the staged modules in the image chroot under qemu
+  (`rk35xx-dkms-build`); `rk35xx-firstboot` only builds what is still missing. ❓ not yet run.

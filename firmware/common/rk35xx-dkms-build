@@ -1,0 +1,32 @@
+#!/bin/sh
+# Build and install every staged DKMS source for one kernel. build-image.sh runs it in the image
+# chroot, so rk35xx-firstboot normally finds everything installed and builds nothing.
+#   usage: rk35xx-dkms-build [kernel-version]    (default: the running kernel)
+kver="${1:-$(uname -r)}"
+
+# the headers' host tools must exist before any module builds
+for hook in /etc/kernel/postinst.d/00-*-kernel-prepare; do
+	[ -x "$hook" ] && "$hook" "$kver"
+done
+
+for conf in /usr/src/*/dkms.conf; do
+	[ -f "$conf" ] || continue
+	name=$(sed -n 's/^PACKAGE_NAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$conf")
+	ver=$(sed -n 's/^PACKAGE_VERSION="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$conf")
+	[ -n "$name" ] && [ -n "$ver" ] || continue
+	dkms status "$name/$ver" -k "$kver" 2>/dev/null | grep -q installed && continue
+	# the kernel may already provide this driver, as a module or built in; either way ours cannot
+	# take over the device, and dkms cannot override an unversioned module
+	mod=$(sed -n 's/^BUILT_MODULE_NAME\[0\]="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$conf")
+	if [ -n "$mod" ] && { find "/lib/modules/$kver/kernel" -name "$mod.ko*" 2>/dev/null | grep -q . \
+		|| grep -q "/$mod\.ko" "/lib/modules/$kver/modules.builtin" 2>/dev/null; }; then
+		echo "$name: kernel provides $mod, skipping" >&2
+		continue
+	fi
+	dkms remove "$name/$ver" --all >/dev/null 2>&1 || true
+	dkms add "$name/$ver" 2>/dev/null || true
+	# one bad package must not take the rest with it
+	dkms build "$name/$ver" -k "$kver" || { echo "$name: build failed, skipping" >&2; continue; }
+	dkms install "$name/$ver" -k "$kver" || echo "$name: install failed, skipping" >&2
+done
+depmod -a "$kver"

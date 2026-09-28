@@ -101,7 +101,11 @@ brew install xz coreutils                    # macOS  ·  apt install xz-utils o
 ./build-image.sh Armbian_..._Rock-2f_..._minimal.img.xz hs86-mini13   # any firmware/<board>
 ```
 
-~1 minute, no Docker, no kernel build. Output: `Armbian_..._-<board>.img`.
+~1 minute plus the DKMS modules, no Docker, no kernel build. Output: `Armbian_..._-<board>.img`.
+
+On Linux the modules are built into the image, in its own arm64 userspace: that needs `doas` and the
+`qemu-aarch64` binfmt handler with the `F` flag, and takes several minutes. On macOS, or with
+`DKMS_PREBUILD=no`, the box builds them on first boot instead.
 
 ## Flash and boot
 
@@ -117,7 +121,8 @@ ssh root@<box-ip>                        # Armbian default password for root is 
 …or [Balena Etcher](https://etcher.balena.io/). Android is untouched: eject the SD and it boots
 again.
 
-> **First boot takes ~5 minutes** and is off the network while DKMS compiles.
+> **An image built without its DKMS modules** spends ~5 minutes of first boot compiling them, off
+> the network.
 
 > **No card slot on your box?** Nothing here boots from SD, so skip to [no SD slot](#no-sd-slot).
 
