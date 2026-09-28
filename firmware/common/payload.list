@@ -19,3 +19,5 @@
 644	common/kino/ssh-after-setup.conf	/etc/systemd/system/ssh.service.d/10-kplex-after-setup.conf
 644	common/kino/ssh-after-setup.conf	/etc/systemd/system/ssh.socket.d/10-kplex-after-setup.conf
 644	common/kino/firstboot-notice.sh	/etc/profile.d/00-kplex-firstboot.sh
+644	common/kino/kino-env.sh	/etc/profile.d/kplex-env.sh
+644	common/kino/gamecontrollerdb.txt	/etc/gamecontrollerdb.txt

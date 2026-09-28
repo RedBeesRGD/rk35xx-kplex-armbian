@@ -1,6 +1,6 @@
 #!/bin/bash
-# kino-setup — loader cache, sshd marker, /kino tree, ~/kino.sh, PipeWire at boot. Idempotent.
-# Run at first login (from /root/provisioning.sh) and by rk35xx-update.
+# kino-setup — loader cache, sshd marker, /kino tree, ~/kino.sh, console autologin, PipeWire at boot.
+# Idempotent. Run at first login (from /root/provisioning.sh) and by rk35xx-update.
 #   usage: kino-setup [USER]
 [[ $EUID -eq 0 ]] || { echo "kino-setup: run as root" >&2; exit 1; }
 
@@ -12,6 +12,12 @@ ldconfig
 if [[ ! -e /root/.not_logged_in_yet ]]; then
 	install -d /var/lib/kplex
 	touch /var/lib/kplex/setup-done
+fi
+
+# the /usr/local libxkbcommon looks for Compose files under its own prefix
+if [[ ! -e /usr/local/share/X11/locale ]]; then
+	install -d /usr/local/share/X11
+	ln -s /usr/share/X11/locale /usr/local/share/X11/locale
 fi
 
 # the user: the argument, else the owner of an existing /kino, else UID 1000
@@ -31,6 +37,12 @@ chown -R "$user:" /kino
 
 # first install only, so the user's own edits survive updates
 [[ -e $home/kino.sh ]] || install -m 755 -o "$user" -g "$(id -gn "$user")" /etc/skel/kino.sh "$home/kino.sh"
+
+# the HDMI console logs in as this user: kage needs a seat session the user owns
+install -d /etc/systemd/system/getty@tty1.service.d
+printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --noclear --autologin %s %%I $TERM\n' "$user" \
+	> /etc/systemd/system/getty@tty1.service.d/20-kplex-autologin.conf
+systemctl daemon-reload
 
 # PipeWire for this user from boot: lingering starts the user's systemd at boot, without a login
 if [[ -e /usr/lib/systemd/user/pipewire.service ]]; then

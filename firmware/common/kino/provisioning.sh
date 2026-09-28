@@ -6,3 +6,7 @@
 install -d /var/lib/kplex
 touch /var/lib/kplex/setup-done
 systemctl start ssh.service || true
+
+# hand the HDMI console to the new user once Armbian's cleanup has run; this ends the root session there
+echo "Logging in as ${RealUserName:-the new user} on the console..."
+systemd-run --quiet --on-active=3 systemctl restart getty@tty1.service || true

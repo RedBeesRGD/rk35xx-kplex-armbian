@@ -1,0 +1,1 @@
+03001cd37d0400000740000000010000,Gravis Xterminator Force,a:b0,b:b1,x:b2,y:b3,lefttrigger:b4,righttrigger:b5,leftshoulder:b6,rightshoulder:b7,back:b8,start:b9,guide:b10,leftx:a0,lefty:a1,platform:Linux,
