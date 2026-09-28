@@ -38,9 +38,10 @@ chown -R "$user:" /kino
 # first install only, so the user's own edits survive updates
 [[ -e $home/kino.sh ]] || install -m 755 -o "$user" -g "$(id -gn "$user")" /etc/skel/kino.sh "$home/kino.sh"
 
-# the HDMI console logs in as this user: kage needs a seat session the user owns
+# the HDMI console logs in as this user: kage needs a seat session the user owns. Without --noclear
+# the getty clears the screen, so nothing of the first-boot setup session is left above the login.
 install -d /etc/systemd/system/getty@tty1.service.d
-printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --noclear --autologin %s %%I $TERM\n' "$user" \
+printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin %s %%I $TERM\n' "$user" \
 	> /etc/systemd/system/getty@tty1.service.d/20-kplex-autologin.conf
 systemctl daemon-reload
 
